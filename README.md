@@ -8,8 +8,9 @@ A premium, high-end "Beverage Laboratory" experience designed for the modern hom
 The Beverage Laboratory introduces a cutting-edge visual framework that prioritizes premium aesthetics and intuitive data visualization across both the consumer-facing frontend and the Django Admin suite:
 - **Glassmorphism Shell**: Translucent surfaces with deep backdrop blurs and subtle reflections.
 - **Neon-Glow HSL**: Vibrant, high-contrast color tokens (Lime, Orange, Cyan) optimized for a deep charcoal dark mode.
+- **High-Luminosity Calibration**: Recalibrated text tokens (80-90% brightness) and enhanced placeholder contrast (65%) for perfect readability across all display types.
 - **Modern Typography**: High-legibility "Outfit" font system for a clean, tech-first readout.
-- **Unified Administration**: The native Django admin has been entirely overhauled to match the frontend, replacing the legacy 1.0 layouts with responsive Flexbox/Grid systems and dynamic glass elements.
+- **Unified Administration**: The native Django admin has been entirely overhauled to match the frontend, replacing legacy layouts with responsive Flexbox/Grid systems and dynamic glass elements.
 
 ## 🚀 Laboratory Environments
 
@@ -101,9 +102,9 @@ graph TD
 
 ## 🛠️ Laboratory Stack
 
-- **Framework**: Django 5.x (Python 3.12+)
+- **Framework**: Django 6.x (Python 3.12+)
 - **Database**: PostgreSQL 16 (Containerized)
-- **UI Engine**: Custom Carbonated Glass CSS (Vanilla)
+- **UI Engine**: Custom Carbonated Glass CSS (Vanilla & HSL-mapped)
 - **Networking**: `requests` for robust REST API dispatching
 - **Deployment**: Docker Compose Orchestration
 - **Performance**: Gunicorn production server with health-check monitoring
@@ -139,8 +140,15 @@ The laboratory terminal will be accessible at `http://localhost:8000`.
    ```bash
    python manage.py migrate
    ```
+   *Note: If starting fresh, the migrations have been squashed into an initial state for better performance.*
 
-4. **Initialize Server**:
+4. **Migration Cleanup Protocol**:
+   To finalize a consolidated history:
+   1. Confirm your current database is fully migrated.
+   2. Remove the old migration files (0001-0008).
+   3. Update the squashed migration file by removing the `replaces` field.
+
+5. **Initialize Server**:
    ```bash
    python manage.py runserver
    ```
