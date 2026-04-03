@@ -1,0 +1,362 @@
+/* Beverage Laboratory Admin Overrides - Modernized Responsive Layout */
+:root {
+    /* Override core Django Admin colors */
+    --primary: hsl(125, 95%, 45%); /* Fizz Lime */
+    --secondary: hsl(135, 80%, 30%);
+    --accent: hsl(125, 95%, 45%);
+    --primary-fg: #fff;
+    --body-fg: #e2e8f0;
+    --body-bg: hsl(220, 30%, 8%); /* bg-base */
+    --body-quiet-color: #94a3b8;
+    --body-loud-color: #fff;
+    --header-color: rgba(255, 255, 255, 0.7);
+    --header-branding-color: #fff;
+    --header-bg: rgba(255, 255, 255, 0.05); /* Glass header */
+    --header-link-color: hsl(125, 95%, 45%);
+    --breadcrumbs-fg: #94a3b8;
+    --breadcrumbs-link-fg: #fff;
+    --breadcrumbs-bg: rgba(0, 0, 0, 0.2);
+    --link-fg: hsl(125, 95%, 45%);
+    --link-hover-color: hsl(125, 95%, 65%);
+    --link-selected-fg: #fff;
+    --hairline-color: rgba(255, 255, 255, 0.1);
+    --border-color: rgba(255, 255, 255, 0.1);
+    --error-fg: hsl(0, 80%, 65%);
+    --message-success-bg: rgba(44, 177, 85, 0.2);
+    --message-warning-bg: rgba(245, 158, 11, 0.2);
+    --message-error-bg: rgba(239, 68, 68, 0.2);
+    --darkened-bg: rgba(0, 0, 0, 0.2);
+    --selected-bg: rgba(255, 255, 255, 0.05);
+    --selected-row: rgba(44, 177, 85, 0.1);
+    --button-fg: #000;
+    --button-bg: hsl(125, 95%, 45%);
+    --button-hover-bg: hsl(125, 95%, 55%);
+    --default-button-bg: hsl(125, 95%, 45%);
+    --default-button-hover-bg: hsl(125, 95%, 55%);
+    --close-button-bg: #fff;
+    --close-button-hover-bg: #ef4444;
+}
+
+/* Base Body Modifications */
+body {
+    background: radial-gradient(circle at top left, hsl(220, 30%, 8%), hsl(220, 40%, 4%)) !important;
+    background-color: var(--body-bg) !important;
+    color: var(--body-fg) !important;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+    margin: 0;
+    padding: 0;
+}
+
+/* Layout Container */
+#container {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+/* Header Re-styling */
+#header {
+    background: var(--header-bg);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    color: var(--header-branding-color);
+    padding: 1rem 2.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+}
+#branding h1 {
+    font-weight: 800;
+    font-size: 1.4rem;
+    margin: 0;
+    letter-spacing: 0.02em;
+}
+#user-tools {
+    font-size: 0.85rem;
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    font-weight: 500;
+}
+#user-tools a {
+    color: var(--body-quiet-color);
+    text-decoration: none;
+    transition: color 0.2s;
+}
+#user-tools a:hover {
+    color: #fff;
+}
+#user-tools strong {
+    color: var(--primary);
+}
+
+/* Hide Unnecessary Native Theme Toggle */
+#theme-toggle, .theme-toggle {
+    display: none !important;
+}
+
+/* Breadcrumbs */
+div.breadcrumbs {
+    background: transparent;
+    padding: 15px 2.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--body-quiet-color);
+}
+div.breadcrumbs a {
+    color: var(--primary);
+    text-decoration: none;
+    transition: color 0.2s;
+}
+div.breadcrumbs a:hover {
+    color: var(--link-hover-color);
+}
+
+/* Main Content Area */
+#content {
+    padding: 2rem;
+    flex: 1;
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
+}
+#content h1 {
+    font-weight: 800;
+    font-size: 2rem;
+    margin-bottom: 1.5rem;
+    color: #fff;
+}
+
+/* Module Containers (Glass Cards) */
+.module {
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    margin-bottom: 2rem;
+    overflow: hidden;
+}
+
+.module caption, .module h2 {
+    background: rgba(0, 0, 0, 0.2);
+    color: var(--primary);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    margin: 0;
+    font-size: 1rem;
+    text-transform: uppercase;
+}
+
+/* Tables and Rows */
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+tbody tr:nth-of-type(odd) {
+    background-color: transparent !important;
+}
+tbody tr:nth-of-type(even) {
+    background-color: rgba(0, 0, 0, 0.1) !important;
+}
+tbody tr:hover {
+    background-color: var(--selected-bg) !important;
+}
+tbody td, tbody th, thead th {
+    padding: 12px 20px;
+    font-size: 0.95rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+thead th {
+    background: rgba(0, 0, 0, 0.3);
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    color: var(--body-quiet-color);
+}
+
+/* Buttons */
+.button, input[type=submit], input[type=button], .submit-row input, a.button {
+    background: var(--button-bg);
+    color: var(--button-fg);
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+    letter-spacing: 0.05em;
+    box-shadow: 0 0 15px rgba(44, 177, 85, 0.2);
+}
+.button:hover, input[type=submit]:hover, a.button:hover {
+    background: var(--button-hover-bg);
+    box-shadow: 0 0 20px rgba(44, 177, 85, 0.4);
+    transform: translateY(-1px);
+}
+.button.default, input[type=submit].default {
+    background: var(--default-button-bg);
+    color: #000;
+}
+
+/* Inputs and Forms */
+input[type=text], input[type=password], input[type=email], input[type=url], input[type=number], input[type=tel], textarea, select, .vTextField {
+    background-color: rgba(0, 0, 0, 0.2) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: #fff !important;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.95rem;
+    width: 100%;
+    max-width: 500px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+input:focus, textarea:focus, select:focus {
+    border-color: var(--primary) !important;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(44, 177, 85, 0.2) !important;
+}
+
+/* Form Layouts (Fieldsets) */
+fieldset {
+    border: none;
+    padding: 0;
+    margin: 0;
+}
+.form-row {
+    padding: 15px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    align-items: center;
+}
+.form-row > div {
+    flex: 1;
+    min-width: 250px;
+}
+.form-row label {
+    font-weight: 600;
+    color: var(--body-quiet-color);
+    margin-bottom: 5px;
+    display: block;
+}
+
+/* Submit Row */
+.submit-row {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 15px 20px;
+    margin-top: 20px;
+    display: flex;
+    gap: 15px;
+    justify-content: flex-end;
+}
+
+/* Changelist filtering */
+#changelist {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+#changelist-form {
+    flex: 1;
+    min-width: 300px;
+}
+#changelist-filter {
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    border-radius: 12px;
+    padding: 0;
+    width: 280px;
+    flex-shrink: 0;
+}
+#changelist-filter h2 {
+    background: rgba(0, 0, 0, 0.2) !important;
+    color: var(--body-fg) !important;
+    padding: 15px;
+    border-radius: 12px 12px 0 0;
+}
+#changelist-filter ul {
+    padding: 10px 15px;
+}
+#changelist-filter li {
+    margin-bottom: 5px;
+}
+
+/* Action Bar */
+.actions {
+    background: rgba(255, 255, 255, 0.02);
+    padding: 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Pagination */
+.paginator {
+    background: rgba(0, 0, 0, 0.2);
+    padding: 15px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    text-align: center;
+}
+
+/* Login Page Specfic */
+.login #header {
+    background: transparent;
+    border: none;
+    justify-content: center;
+    padding-top: 5rem;
+}
+.login #content {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+}
+.login #content-main {
+    width: 100%;
+    max-width: 450px;
+}
+.login form {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 16px;
+    padding: 2.5rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(10px);
+}
+.login .form-row {
+    border: none;
+    padding: 10px 0;
+    display: block;
+}
+.login .submit-row {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin-top: 1.5rem;
+}
+.login .submit-row input {
+    width: 100%;
+    padding: 12px;
+}
+
+/* Error Messages */
+.errornote {
+    background: var(--message-error-bg);
+    color: var(--error-fg);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    padding: 15px;
+    border-radius: 8px;
+    font-weight: 600;
+    margin-bottom: 20px;
+}
+

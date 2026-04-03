@@ -1,0 +1,237 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}System Protocol - Beverage Laboratory{% endblock %}
+
+{% block content %}
+<div class="glass-surface p-4 mb-4 border-lab">
+    <div class="d-flex align-items-center gap-3">
+        <div class="bg-primary bg-opacity-10 p-3 rounded-circle text-gradient-lab">
+            <i class="bi bi-cpu fs-3"></i>
+        </div>
+        <div>
+            <h3 class="mb-0 text-white">SYSTEM <span class="text-gradient-lab">PROTOCOLS</span></h3>
+            <p class="text-dim mb-0">Manage archival data and laboratory configuration.</p>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Vertical Menu -->
+    <div class="col-md-3">
+        <div class="nav flex-column nav-pills glass-surface p-2" id="v-pills-tab" role="tablist" aria-orientation="vertical">
+            <button class="nav-link active text-start py-3 fw-bold" id="v-pills-archival-tab" data-bs-toggle="pill" data-bs-target="#v-pills-archival" type="button" role="tab" aria-selected="true">
+                <i class="bi bi-floppy me-2"></i> Data & Archival
+            </button>
+            <button class="nav-link text-start py-3 fw-bold" id="v-pills-integrations-tab" data-bs-toggle="pill" data-bs-target="#v-pills-integrations" type="button" role="tab" aria-selected="false">
+                <i class="bi bi-plug me-2"></i> Integrations
+            </button>
+        </div>
+    </div>
+
+    <!-- Tab Content -->
+    <div class="col-md-9">
+        <div class="tab-content" id="v-pills-tabContent">
+            
+            <!-- Archival Pane -->
+            <div class="tab-pane fade show active" id="v-pills-archival" role="tabpanel">
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <div class="glass-surface p-4 h-100 border-white border-opacity-10">
+                            <div class="d-flex align-items-center gap-2 mb-4">
+                                <i class="bi bi-download text-gradient-lab"></i>
+                                <h5 class="mb-0 text-white">ARCHIVAL EXPORT</h5>
+                            </div>
+                            <p class="text-dim small mb-4">Complete archival dump of all formula profiles, laboratory notebooks, and interaction history into a single laboratory JSON format.</p>
+                            <div class="d-grid mt-auto">
+                                <a href="{% url 'export_data' %}" class="btn btn-primary py-2 text-dark fw-bold">
+                                    <i class="bi bi-file-earmark-arrow-down"></i> Download Dossier
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="glass-surface p-4 h-100 border-white border-opacity-10">
+                            <div class="d-flex align-items-center gap-2 mb-4">
+                                <i class="bi bi-upload text-warning"></i>
+                                <h5 class="mb-0 text-white">INTEGRATION PROTOCOL</h5>
+                            </div>
+                            <p class="text-dim small mb-4">Re-integrate previously archived data into the laboratory index. Merges by name.</p>
+                            <form id="importForm" enctype="multipart/form-data">
+                                <input class="form-control form-control-sm bg-dark border-white border-opacity-10 text-white mb-3" type="file" id="backupFile" accept=".json" required>
+                                <div id="importStatus" class="mb-3" style="display: none;">
+                                    <div class="progress bg-white bg-opacity-5" style="height: 4px;">
+                                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-warning w-100"></div>
+                                    </div>
+                                </div>
+                                <div class="d-grid mt-auto">
+                                    <button type="submit" class="btn btn-warning py-2 text-dark fw-bold">
+                                        <i class="bi bi-arrow-repeat"></i> Initiate Target Merge
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Integrations Pane -->
+            <div class="tab-pane fade" id="v-pills-integrations" role="tabpanel">
+                <div class="glass-surface p-4 border-white border-opacity-10">
+                    <div class="d-flex align-items-center gap-2 mb-4">
+                        <i class="bi bi-database-up text-primary fs-4"></i>
+                        <h4 class="mb-0 text-white">External Integrations</h4>
+                    </div>
+                    
+                    <h6 class="text-gradient-lab mb-3">Mealie Recipe Management</h6>
+                    <p class="text-dim small mb-4">Synchronize Beverage Laboratory syntheses precisely into your Mealie instance repository via standard API token.</p>
+                    
+                    <form id="settingsForm">
+                        <div class="mb-4">
+                            <label class="form-label text-white fw-bold small">Mealie Instance URL</label>
+                            <input type="url" name="mealie_url" id="mealie_url" class="form-control bg-dark text-white border-white border-opacity-10" placeholder="https://mealie.local" value="{{ config.mealie_url }}">
+                            <div class="form-text text-dim">The full root URL of the instance without any trailing slash routes.</div>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label text-white fw-bold small">Private API Token</label>
+                            <input type="password" name="mealie_api_key" id="mealie_api_key" class="form-control bg-dark text-white border-white border-opacity-10" placeholder="••••••••••••••••" value="{{ config.mealie_api_key }}">
+                            <div class="form-text text-dim">Generate a long-lived API token from the Mealie User Profile interface.</div>
+                        </div>
+                        <button type="submit" class="btn btn-primary px-5 py-2 fw-bold text-dark" id="saveSettingsBtn">
+                            <i class="bi bi-floppy"></i> Save Configuration
+                        </button>
+                    </form>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+</div>
+
+<!-- Status Modal -->
+<div class="modal fade" id="statusModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content glass-surface border-white border-opacity-10">
+            <div class="modal-header border-white border-opacity-5">
+                <h5 class="modal-title readout-label" id="modalTitle">RECOVERY LOG</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4 text-center" id="modalBody">
+            </div>
+            <div class="modal-footer border-white border-opacity-5">
+                <button type="button" class="btn btn-primary px-4" data-bs-dismiss="modal">Protocol Complete</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Tab Persistence
+document.addEventListener("DOMContentLoaded", function () {
+    let activeTab = localStorage.getItem('settingsActiveTab');
+    if (activeTab) {
+        let triggerEl = document.querySelector(`button[data-bs-target="${activeTab}"]`);
+        if (triggerEl) {
+            let tab = new bootstrap.Tab(triggerEl);
+            tab.show();
+        }
+    }
+    
+    document.querySelectorAll('button[data-bs-toggle="pill"]').forEach(btn => {
+        btn.addEventListener('shown.bs.tab', event => {
+            localStorage.setItem('settingsActiveTab', event.target.getAttribute('data-bs-target'));
+        });
+    });
+});
+
+// Import Protocol Logic
+document.getElementById('importForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const fileInput = document.getElementById('backupFile');
+    if (!fileInput.files.length) return;
+
+    const formData = new FormData();
+    formData.append('backup_file', fileInput.files[0]);
+
+    const statusEl = document.getElementById('importStatus');
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    
+    statusEl.style.display = 'block';
+    submitBtn.disabled = true;
+
+    fetch('{% url "import_data" %}', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '{{ csrf_token }}'
+        },
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        statusEl.style.display = 'none';
+        submitBtn.disabled = false;
+        const modal = new bootstrap.Modal(document.getElementById('statusModal'));
+        if (data.status === 'success') {
+            document.getElementById('modalTitle').innerText = 'PROTOCOL SUCCESS';
+            document.getElementById('modalBody').innerHTML = `<p class="text-success"><i class="bi bi-check-circle-fill"></i> ${data.message}</p>`;
+        } else {
+            document.getElementById('modalTitle').innerText = 'LOG ERROR';
+            document.getElementById('modalBody').innerHTML = `<p class="text-danger"><i class="bi bi-x-circle-fill"></i> ${data.error || 'Failed to integrate data.'}</p>`;
+        }
+        modal.show();
+    })
+    .catch(error => {
+        statusEl.style.display = 'none';
+        submitBtn.disabled = false;
+        alert('An unexpected error occurred during restore.');
+    });
+});
+
+// Settings Save Logic
+document.getElementById('settingsForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const btn = document.getElementById('saveSettingsBtn');
+    const originalText = btn.innerHTML;
+    
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saving...';
+
+    const payload = {
+        mealie_url: document.getElementById('mealie_url').value,
+        mealie_api_key: document.getElementById('mealie_api_key').value
+    };
+
+    fetch('{% url "save_settings_api" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '{{ csrf_token }}'
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        if (data.status === 'success') {
+            btn.innerHTML = '<i class="bi bi-check-lg"></i> Saved Successfully';
+            btn.classList.replace('btn-primary', 'btn-success');
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.classList.replace('btn-success', 'btn-primary');
+            }, 3000);
+        } else {
+            btn.innerHTML = originalText;
+            alert(data.error);
+        }
+    })
+    .catch(err => {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        alert("An error occurred preserving settings.");
+    });
+});
+</script>
+{% endblock %}
+

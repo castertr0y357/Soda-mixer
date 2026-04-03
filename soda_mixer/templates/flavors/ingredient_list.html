@@ -1,0 +1,475 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Ingredients - Beverage Laboratory{% endblock %}
+
+{% block extra_css %}
+<style>
+    .hover-lime:hover {
+        color: var(--lab-accent) !important;
+    }
+
+    .lab-rating i.active {
+        filter: drop-shadow(0 0 5px var(--fizz-orange));
+        opacity: 1;
+    }
+
+    .lab-rating i:not(.active) {
+        opacity: 0.2;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="glass-surface p-4 mb-4 d-flex justify-content-between align-items-center border-lab">
+    <div>
+        <h2 class="mb-0 text-white">MATERIEL <span class="text-gradient-lab">INVENTORY</span></h2>
+        <p class="text-dim mb-0">Baseline components available for synthesis and extraction.</p>
+    </div>
+    <div class="d-flex align-items-center gap-3">
+        <div class="d-none d-md-block text-dim small">
+            <i class="bi bi-flask"></i> {{ ingredients.count }} Registered Materials
+        </div>
+        {% if user.is_staff %}
+        <button class="btn btn-sm btn-outline-primary border-white border-opacity-10 text-white" data-bs-toggle="modal"
+            data-bs-target="#addIngredientModal">
+            <i class="bi bi-plus-lg"></i> Add
+        </button>
+        <button class="btn btn-sm btn-outline-warning border-white border-opacity-10 text-white" data-bs-toggle="modal"
+            data-bs-target="#manageCategoriesModal">
+            <i class="bi bi-tags"></i> Categories
+        </button>
+        {% else %}
+        <a href="{% url 'admin:login' %}?next={{ request.path }}"
+            class="btn btn-sm btn-outline-secondary border-white border-opacity-10 text-dim"
+            title="Login as staff to manage inventory">
+            <i class="bi bi-lock"></i> Staff Login
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="mb-4">
+    <div class="d-flex flex-wrap gap-2">
+        <a href="{% url 'ingredient_list' %}"
+            class="fizz-pill {% if not request.GET.category %}active{% else %}bg-dark bg-opacity-50 text-white border-white border-opacity-10{% endif %} text-decoration-none">
+            All Compounds
+        </a>
+        {% for cat_name, cat_label in categories %}
+        <a href="?category={{ cat_name }}"
+            class="fizz-pill text-decoration-none {% if request.GET.category == cat_name %}active{% else %}bg-dark bg-opacity-50 text-white border-white border-opacity-10{% endif %}">
+            {{ cat_label }}
+        </a>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="row g-4">
+    {% for ingredient in ingredients %}
+    <div class="col-md-6 col-lg-4">
+        <div class="glass-card h-100 p-4 d-flex flex-column border-white border-opacity-10">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <h4 class="mb-0">
+                    <a href="{% url 'ingredient_detail' ingredient.id %}"
+                        class="text-decoration-none text-white hover-lime fw-bold">{{ ingredient.name }}</a>
+                </h4>
+                <div class="d-flex flex-column align-items-end gap-1">
+                    <span class="badge-fizz bg-{{ ingredient.category }}">{{ ingredient.category }}</span>
+                    <span class="badge border border-white border-opacity-10 text-dim" style="font-size: 0.5rem;">{{ ingredient.get_ingredient_type_display }}</span>
+                </div>
+            </div>
+
+            <div class="mb-3 d-flex align-items-center gap-2">
+                <div class="text-warning d-flex gap-1 lab-rating" data-intensity="{{ ingredient.intensity }}">
+                    {% for i in "12345" %}
+                    <i class="bi {% if forloop.counter <= ingredient.intensity %}bi-star-fill active{% else %}bi-star{% endif %}"></i>
+                    {% endfor %}
+                </div>
+                <span class="text-dim small" style="font-size: 0.7rem; letter-spacing: 0.05em;">LVL {{ ingredient.intensity }}</span>
+            </div>
+
+            {% if ingredient.ingredient_type == 'COFFEE_BEAN' %}
+            <div class="mb-3 small text-dim border-start border-lab ps-2 bg-white bg-opacity-5 py-1">
+                <i class="bi bi-geo-alt"></i> {{ ingredient.origin|default:"Unknown Origin" }}<br>
+                <i class="bi bi-shop"></i> {{ ingredient.roaster|default:"Local Roaster" }}
+            </div>
+            {% endif %}
+
+            {% if ingredient.description %}
+            <p class="text-dim small mb-4">{{ ingredient.description|truncatewords:15 }}</p>
+            {% else %}
+            <p class="text-dim small mb-4 italic">No profile data recorded.</p>
+            {% endif %}
+
+            <div
+                class="mt-auto pt-3 border-top border-white border-opacity-5 d-flex justify-content-between align-items-center">
+                <div class="d-flex gap-2">
+                    <a href="{% url 'ingredient_detail' ingredient.id %}"
+                        class="btn btn-sm btn-outline-primary px-3 border-white border-opacity-10 text-white">
+                        Inspect
+                    </a>
+                    {% if user.is_staff %}
+                    <button type="button"
+                        class="btn btn-sm btn-outline-warning border-white border-opacity-10 btn-edit-material"
+                        title="Edit Material" data-id="{{ ingredient.id }}" data-name="{{ ingredient.name }}"
+                        data-type="{{ ingredient.ingredient_type }}" data-category="{{ ingredient.category }}"
+                        data-intensity="{{ ingredient.intensity }}" data-sweetness="{{ ingredient.sweetness }}"
+                        data-acidity="{{ ingredient.acidity }}" data-bitterness="{{ ingredient.bitterness }}"
+                        data-description="{{ ingredient.description|default:'' }}">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <form action="{% url 'delete_ingredient' ingredient.id %}" method="post" class="m-0"
+                        onsubmit="return confirm('Decommission this material from the laboratory?');">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-outline-danger border-white border-opacity-10"
+                            title="Delete Material">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+                <div class="form-check form-switch p-0 d-flex align-items-center gap-2">
+                    <label class="readout-label mb-0" style="font-size: 0.6rem;">IN LAB</label>
+                    <input class="neon-check inventory-toggle" type="checkbox" {% if ingredient.is_in_inventory %}checked{% endif %} data-ingredient-id="{{ ingredient.id }}">
+                </div>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-12 text-center py-5">
+        <i class="bi bi-flask-slow display-4 text-muted"></i>
+        <p class="text-muted mt-3">No laboratory materials indexed for this profile.</p>
+        {% if user.is_staff %}
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addIngredientModal">Register
+            Material</button>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Inventory Management Modals -->
+{% if user.is_staff %}
+<!-- Add Ingredient Modal -->
+<div class="modal fade" id="addIngredientModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="post" action="{% url 'add_ingredient' %}"
+            class="modal-content glass-surface border-white border-opacity-10">
+            {% csrf_token %}
+            <div class="modal-header border-bottom border-white border-opacity-10">
+                <h5 class="modal-title text-white"><i class="bi bi-plus-lg text-gradient-lab"></i> Register Material</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-body">
+                <div class="mb-3">
+                    <label class="form-label text-white fw-bold small">Compound Name</label>
+                    <input type="text" name="name" class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10" required>
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label text-white fw-bold small">Type</label>
+                        <select name="ingredient_type"
+                            class="form-select bg-dark bg-opacity-50 text-white border-white border-opacity-10">
+                            <option value="SODA_SYRUP">Soda Syrup</option>
+                            <option value="COFFEE_BEAN">Coffee Bean</option>
+                            <option value="ADDITIVE">Additive (Cream, Sugar)</option>
+                            <option value="OTHER">Other</option>
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label text-white fw-bold small">Base Profile</label>
+                        <input type="text" name="category" list="category-list" autocomplete="off" class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10" required placeholder="Select or type new...">
+                        <datalist id="category-list">
+                            {% for cat_val, cat_display in categories %}
+                            <option value="{{ cat_val }}">{{ cat_display }}</option>
+                            {% endfor %}
+                        </datalist>
+                    </div>
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-3">
+                        <label class="form-label text-white fw-bold small" title="1-5">Intensity</label>
+                        <input type="number" name="intensity" value="3" min="1" max="5"
+                            class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10 text-center">
+                    </div>
+                    <div class="col-3">
+                        <label class="form-label text-white fw-bold small" title="1-5">Sweetness</label>
+                        <input type="number" name="sweetness" value="3" min="1" max="5"
+                            class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10 text-center">
+                    </div>
+                    <div class="col-3">
+                        <label class="form-label text-white fw-bold small" title="1-5">Acidity</label>
+                        <input type="number" name="acidity" value="3" min="1" max="5"
+                            class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10 text-center">
+                    </div>
+                    <div class="col-3">
+                        <label class="form-label text-white fw-bold small" title="1-5">Bitterness</label>
+                        <input type="number" name="bitterness" value="1" min="1" max="5"
+                            class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10 text-center">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label text-white fw-bold small">Description (Optional)</label>
+                    <textarea name="description" rows="2"
+                        class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer border-top border-white border-opacity-10">
+                <button type="submit" class="btn btn-primary w-100">Index Material</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Ingredient Modal -->
+<div class="modal fade" id="editIngredientModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="post" id="editIngredientForm" class="modal-content glass-surface border-white border-opacity-10">
+            {% csrf_token %}
+            <div class="modal-header border-bottom border-white border-opacity-10">
+                <h5 class="modal-title text-white"><i class="bi bi-pencil text-warning"></i> Modify Material</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-body">
+                <div class="mb-3">
+                    <label class="form-label text-white fw-bold small">Compound Name</label>
+                    <input type="text" name="name" id="editName" class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10" required>
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label text-white fw-bold small">Type</label>
+                        <select name="ingredient_type" id="editType"
+                            class="form-select bg-dark bg-opacity-50 text-white border-white border-opacity-10">
+                            <option value="SODA_SYRUP">Soda Syrup</option>
+                            <option value="COFFEE_BEAN">Coffee Bean</option>
+                            <option value="ADDITIVE">Additive (Cream, Sugar)</option>
+                            <option value="OTHER">Other</option>
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label text-white fw-bold small">Base Profile</label>
+                        <input type="text" name="category" id="editCategory" list="edit-category-list"
+                            autocomplete="off"
+                            class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10"
+                            required>
+                        <datalist id="edit-category-list">
+                            {% for cat_val, cat_display in categories %}
+                            <option value="{{ cat_val }}">{{ cat_display }}</option>
+                            {% endfor %}
+                        </datalist>
+                    </div>
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-3">
+                        <label class="form-label text-white fw-bold small">Intensity</label>
+                        <input type="number" name="intensity" id="editInt" min="1" max="5"
+                            class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10 text-center">
+                    </div>
+                    <div class="col-3">
+                        <label class="form-label text-white fw-bold small">Sweetness</label>
+                        <input type="number" name="sweetness" id="editSwt" min="1" max="5"
+                            class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10 text-center">
+                    </div>
+                    <div class="col-3">
+                        <label class="form-label text-white fw-bold small">Acidity</label>
+                        <input type="number" name="acidity" id="editAcd" min="1" max="5"
+                            class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10 text-center">
+                    </div>
+                    <div class="col-3">
+                        <label class="form-label text-white fw-bold small">Bitterness</label>
+                        <input type="number" name="bitterness" id="editBit" min="1" max="5"
+                            class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10 text-center">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label text-white fw-bold small">Description (Optional)</label>
+                    <textarea name="description" id="editDesc" rows="2"
+                        class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer border-top border-white border-opacity-10">
+                <button type="submit" class="btn btn-warning w-100 text-dark fw-bold">Preserve Edits</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Manage Categories Modal -->
+<div class="modal fade" id="manageCategoriesModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content glass-surface border-white border-opacity-10">
+            <div class="modal-header border-bottom border-white border-opacity-10">
+                <h5 class="modal-title text-white"><i class="bi bi-tags text-warning"></i> Laboratory Registry</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-body p-4">
+                <div class="row g-4">
+                    <!-- Recipe Tags Column -->
+                    <div class="col-md-6 border-end border-white border-opacity-10">
+                        <h6 class="text-white mb-3 fw-bold small uppercase tracking-wider">Recipe Tags</h6>
+                        <div class="input-group input-group-sm mb-3">
+                            <input type="text" id="newRecipeCatName" class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10" placeholder="New Tag Name...">
+                            <select id="newRecipeCatColor" class="form-select bg-dark bg-opacity-50 text-white border-white border-opacity-10" style="max-width: 100px;">
+                                <option value="bg-primary">Blue</option>
+                                <option value="bg-success">Green</option>
+                                <option value="bg-danger">Red</option>
+                                <option value="bg-warning text-dark">Yellow</option>
+                                <option value="bg-info text-dark">Cyan</option>
+                                <option value="bg-pink">Pink</option>
+                            </select>
+                            <button class="btn btn-primary" id="btnAddRecipeCat"><i class="bi bi-plus-lg"></i></button>
+                        </div>
+                        <ul class="list-group list-group-flush bg-transparent" id="recipeCatList">
+                            {% for cat in all_categories %}
+                            <li
+                                class="list-group-item bg-transparent border-white border-opacity-5 text-white d-flex justify-content-between align-items-center px-0">
+                                <div class="d-flex align-items-center">
+                                    <span class="badge {{ cat.color }} me-2"
+                                        style="width: 12px; height: 12px; padding: 0;">&nbsp;</span>
+                                    <span>{{ cat.name }}</span>
+                                </div>
+                                <button class="btn btn-sm text-danger btn-link p-0 hover-lime btn-delete-recipe-cat"
+                                    data-id="{{ cat.id }}"><i class="bi bi-trash"></i></button>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+
+                    <!-- Ingredient Profiles Column -->
+                    <div class="col-md-6">
+                        <h6 class="text-white mb-3 fw-bold small uppercase tracking-wider">Ingredient Profiles</h6>
+                        <p class="text-white small mb-3">Active profiles derived from your inventory. Deleting a profile reassigns ingredients to 'other'.</p>
+                        <ul class="list-group list-group-flush bg-transparent">
+                            {% for cat_name, cat_label in categories %}
+                            <li
+                                class="list-group-item bg-transparent border-white border-opacity-5 text-white d-flex justify-content-between align-items-center px-0">
+                                <span class="fw-bold">{{ cat_label }}</span>
+                                {% if cat_name != 'other' %}
+                                <button class="btn btn-sm text-danger btn-link p-0 hover-lime btn-delete-ing-profile"
+                                    data-profile="{{ cat_name }}" title="Reassign all to 'other'">
+                                    <i class="bi bi-eraser"></i>
+                                </button>
+                                {% endif %}
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // 1. Edit Material Modal Logic
+        document.querySelectorAll('.btn-edit-material').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const d = this.dataset;
+                document.getElementById('editIngredientForm').action = `/ingredients/${d.id}/edit/`;
+                document.getElementById('editName').value = d.name;
+                document.getElementById('editType').value = d.type;
+                document.getElementById('editCategory').value = d.category;
+                document.getElementById('editInt').value = d.intensity;
+                document.getElementById('editSwt').value = d.sweetness;
+                document.getElementById('editAcd').value = d.acidity;
+                document.getElementById('editBit').value = d.bitterness;
+                document.getElementById('editDesc').value = d.description;
+
+                new bootstrap.Modal(document.getElementById('editIngredientModal')).show();
+            });
+        });
+
+        // 2. Inventory Toggle Logic
+        document.querySelectorAll('.inventory-toggle').forEach(chk => {
+            chk.addEventListener('change', function () {
+                const ingredientId = this.dataset.ingredientId;
+                const isChecked = this.checked;
+
+                fetch(`/api/ingredients/${ingredientId}/toggle_inventory/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify({ is_in_inventory: isChecked })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.error) alert('Failed to update inventory status.');
+                    });
+            });
+        });
+
+        // 3. Add Recipe Category Logic
+        const btnAddCat = document.getElementById('btnAddRecipeCat');
+        if (btnAddCat) {
+            btnAddCat.addEventListener('click', function () {
+                const name = document.getElementById('newRecipeCatName').value;
+                const color = document.getElementById('newRecipeCatColor').value;
+                if (!name) return;
+
+                fetch('/api/categories/create/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify({ name, color })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') location.reload();
+                        else alert(data.error);
+                    });
+            });
+        }
+
+        // 4. Delete Recipe Category Logic
+        document.querySelectorAll('.btn-delete-recipe-cat').forEach(btn => {
+            btn.addEventListener('click', function () {
+                if (!confirm('Delete this tag? Recipes using it will lose the tag.')) return;
+                const id = this.dataset.id;
+                const li = this.closest('li');
+
+                fetch(`/api/categories/${id}/delete/`, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') li.remove();
+                        else alert(data.error);
+                    });
+            });
+        });
+
+        // 5. Delete Ingredient Profile Logic
+        document.querySelectorAll('.btn-delete-ing-profile').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const profile = this.dataset.profile;
+                if (!confirm(`Reassign all ingredients in '${profile}' to 'other'?`)) return;
+
+                fetch('/api/ingredient-profiles/delete/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify({ profile })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') location.reload();
+                        else alert(data.error);
+                    });
+            });
+        });
+    });
+</script>
+{% endblock %}

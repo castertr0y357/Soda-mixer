@@ -1,0 +1,282 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Create Formula - Beverage Laboratory{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{% url 'recipe_list' %}" class="btn btn-sm btn-outline-secondary border-0 text-dim">
+        <i class="bi bi-arrow-left"></i> Archive
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="glass-surface p-4 mb-4 border-lab">
+            <div class="d-flex align-items-center gap-3 mb-4">
+                <div class="bg-primary bg-opacity-10 p-3 rounded-circle text-gradient-lab">
+                    <i class="bi bi-flask fs-3"></i>
+                </div>
+                <div>
+                    <h3 class="mb-0 text-white">FORMULA <span class="text-gradient-lab">SYNTHESIS</span></h3>
+                    <p class="text-dim mb-0">Define the molecular structure and extraction protocols.</p>
+                </div>
+            </div>
+
+            {% if error %}
+            <div class="glass-card p-3 border-danger border-opacity-25 bg-danger bg-opacity-5 mb-4 text-danger small">
+                <i class="bi bi-exclamation-octagon me-2"></i> {{ error }}
+            </div>
+            {% endif %}
+            
+            <form method="POST" id="recipeForm">
+                {% csrf_token %}
+                
+                <div class="row g-3 mb-4">
+                    <div class="col-md-8">
+                        <label for="name" class="readout-label mb-2">FORMULA IDENTITY *</label>
+                        <input type="text" class="form-control form-control-lg bg-dark border-white border-opacity-10 text-white" id="name" name="name" placeholder="Enter identity..." required>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="drink_type" class="readout-label mb-2">SYNTHESIS TYPE</label>
+                        <select class="form-select form-select-lg bg-dark border-white border-opacity-10 text-white" id="drink_type" name="drink_type" onchange="toggleDrinkType()">
+                            <option value="SODA">SODA LAB</option>
+                            <option value="COFFEE">COFFEE LAB</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Coffee Specific Parameters -->
+                <div id="coffeeParams" class="glass-card p-4 mb-4 border-white border-opacity-10 bg-white bg-opacity-5" style="display: none;">
+                    <h6 class="readout-label mb-4 text-gradient-lab">EXTRACTION PROTOCOLS</h6>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="readout-label mb-2">BREW METHOD</label>
+                            <select class="form-select bg-dark border-white border-opacity-10 text-white" name="brew_method">
+                                <option value="ESPRESSO">Espresso</option>
+                                <option value="POUROVER">Pour Over</option>
+                                <option value="FRENCHPRESS">French Press</option>
+                                <option value="AEROPRESS">Aeropress</option>
+                                <option value="COLDBREW">Cold Brew</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="readout-label mb-2">GRIND SIZE</label>
+                            <select class="form-select bg-dark border-white border-opacity-10 text-white" name="grind_size">
+                                <option value="FINE">Fine</option>
+                                <option value="MEDIUM">Medium</option>
+                                <option value="COARSE">Coarse</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="readout-label mb-2">WATER TEMP (°C)</label>
+                            <input type="number" class="form-control bg-dark border-white border-opacity-10 text-white" name="water_temp_c" value="93" step="0.5">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="readout-label mb-2">BREW TIME (SEC)</label>
+                            <input type="number" class="form-control bg-dark border-white border-opacity-10 text-white" name="brew_time_sec" placeholder="e.g. 30">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="readout-label mb-2">TOTAL WATER (G)</label>
+                            <input type="number" class="form-control bg-dark border-white border-opacity-10 text-white" name="total_water_g" placeholder="e.g. 250">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-4">
+                    <label for="description" class="readout-label mb-2">OBSERVATIONAL NOTES</label>
+                    <textarea class="form-control bg-dark border-white border-opacity-10 text-white" id="description" name="description" rows="3" placeholder="Additional sensory data..."></textarea>
+                </div>
+                    
+                <div class="pb-3 mb-4 border-bottom border-white border-opacity-10">
+                    <h5 class="text-gradient-lab mb-0">Materiel Inventory</h5>
+                </div>
+                
+                <div class="row g-3 mb-4" id="availableIngredients">
+                    {% for ingredient in ingredients %}
+                    <div class="col-md-4 col-sm-6 ingredient-item" 
+                         data-type="{{ ingredient.ingredient_type }}"
+                         data-category="{{ ingredient.category }}">
+                        <div class="glass-card p-3 h-100 d-flex flex-column align-items-center justify-content-center text-center cursor-pointer border-white border-opacity-5 hover-lime"
+                             onclick="addIngredient(this, '{{ ingredient.name|escapejs }}', {{ ingredient.intensity }}, '{{ ingredient.category }}')"
+                             data-ingredient-id="{{ ingredient.id }}">
+                            <span class="fw-bold mb-1 text-white">{{ ingredient.name }}</span>
+                            <span class="badge border border-white border-opacity-10 text-dim mb-2" style="font-size: 0.5rem;">{{ ingredient.get_ingredient_type_display }}</span>
+                            <span class="badge-fizz bg-{{ ingredient.category }}">{{ ingredient.category }}</span>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="col-12"><p class="text-dim">No materials available in storage.</p></div>
+                    {% endfor %}
+                </div>
+                    
+                <div class="pb-3 mb-4 border-bottom border-white border-opacity-10 mt-5">
+                    <h5 class="text-gradient-lab mb-0">Molecular Composition</h5>
+                </div>
+                
+                <div id="selectedIngredientsList">
+                    <p class="text-dim">No materiel selected for synthesis.</p>
+                </div>
+            </form>
+            
+            <div class="mt-5 d-grid">
+                <button type="submit" form="recipeForm" class="btn btn-primary btn-lg py-3">
+                    <i class="bi bi-save"></i> Finalize Formula
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="glass-surface p-4 mb-4">
+            <h6 class="readout-label mb-3">SYNTHESIS PROTOCOLS</h6>
+            <ul class="list-unstyled mb-0 small text-dim" id="protocolsList">
+                <li class="mb-3 d-flex gap-2">
+                    <i class="bi bi-shield-check text-gradient-lab"></i>
+                    Balance 2-3 compounds for optimal sensory output.
+                </li>
+                <li class="mb-3 d-flex gap-2">
+                    <i class="bi bi-shield-check text-gradient-lab"></i>
+                    Offset high-potency levels with milder agents.
+                </li>
+                <li class="mb-3 d-flex gap-2">
+                    <i class="bi bi-shield-check text-gradient-lab"></i>
+                    <span id="unitProtocol">Standard dosage: 0.5ml - 3.0ml per unit.</span>
+                </li>
+            </ul>
+        </div>
+        
+        <div class="glass-card p-4 border-white border-opacity-10 bg-primary bg-opacity-5">
+            <h6 class="readout-label mb-3 text-gradient-lab">ANALYSIS PIPELINE</h6>
+            <ol class="small text-dim ps-3 mb-0">
+                <li class="mb-2">Select baseline drink type.</li>
+                <li class="mb-2">Identify primary component specs.</li>
+                <li class="mb-2">Calibrate mass proportions.</li>
+                <li>Execute final index command.</li>
+            </ol>
+        </div>
+    </div>
+</div>
+
+<script>
+    let selectedIngredients = [];
+
+    function toggleDrinkType() {
+        const type = document.getElementById('drink_type').value;
+        const coffeeParams = document.getElementById('coffeeParams');
+        const unitProtocol = document.getElementById('unitProtocol');
+        
+        if (type === 'COFFEE') {
+            coffeeParams.style.display = 'block';
+            unitProtocol.textContent = 'Standard dosage: 10g - 30g per extraction.';
+        } else {
+            coffeeParams.style.display = 'none';
+            unitProtocol.textContent = 'Standard dosage: 0.5ml - 3.0ml per unit.';
+        }
+        
+        // Filter ingredients
+        const items = document.querySelectorAll('.ingredient-item');
+        items.forEach(item => {
+            const ingredientType = item.dataset.type;
+            if (type === 'COFFEE') {
+                if (ingredientType === 'COFFEE_BEAN' || ingredientType === 'SYRUP' || ingredientType === 'DAIRY' || ingredientType === 'POWDER') {
+                    item.style.display = 'block';
+                } else {
+                    item.style.display = 'none';
+                }
+            } else {
+                if (ingredientType !== 'COFFEE_BEAN') {
+                    item.style.display = 'block';
+                } else {
+                    item.style.display = 'none';
+                }
+            }
+        });
+        
+        // Reset selected ingredients if they don't match (optional, but safer)
+        // For now just re-render to update units
+        renderSelectedIngredients();
+    }
+
+    function addIngredient(btn, name, intensity, category) {
+        const id = btn.getAttribute('data-ingredient-id');
+        if (selectedIngredients.find(i => i.id === id)) return;
+        
+        selectedIngredients.push({
+            id: id,
+            name: name,
+            intensity: intensity,
+            category: category
+        });
+        renderSelectedIngredients();
+    }
+
+    function removeIngredient(id) {
+        selectedIngredients = selectedIngredients.filter(i => i.id !== id);
+        renderSelectedIngredients();
+    }
+
+    function renderSelectedIngredients() {
+        const container = document.getElementById('selectedIngredientsList');
+        const type = document.getElementById('drink_type').value;
+        const unit = type === 'COFFEE' ? 'G' : 'ML';
+        
+        if (selectedIngredients.length === 0) {
+            container.innerHTML = '<p class="text-dim">No materiel selected for synthesis.</p>';
+            return;
+        }
+        
+        let html = `
+        <div class="table-responsive">
+            <table class="table table-dark table-hover border-white border-opacity-5 mb-0">
+                <thead class="text-dim small readout-label">
+                    <tr>
+                        <th class="border-0">MATERIEL</th>
+                        <th class="border-0">MASS (${unit})</th>
+                        <th class="border-0 text-end">CONTROL</th>
+                    </tr>
+                </thead>
+                <tbody class="border-0">`;
+        
+        for (const i of selectedIngredients) {
+            html += `
+                <tr class="align-middle">
+                    <td class="border-white border-opacity-5">
+                        <div class="fw-bold text-white mb-1">${i.name}</div>
+                        <span class="badge-fizz bg-${i.category}" style="font-size:0.5rem;">${i.category}</span>
+                    </td>
+                    <td class="border-white border-opacity-5">
+                        <input type="number" class="form-control form-control-sm bg-dark border-white border-opacity-10 text-white" 
+                               name="amount_${i.id}" value="${type === 'COFFEE' ? '18.0' : '1.0'}" min="0.1" step="0.1" style="width: 80px;">
+                    </td>
+                    <td class="border-white border-opacity-5 text-end">
+                        <button type="button" class="btn btn-outline-danger btn-sm border-0 opacity-50" onclick="removeIngredient('${i.id}')">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                </tr>`;
+        }
+        
+        html += `</tbody></table></div>`;
+        container.innerHTML = html;
+    }
+
+    document.getElementById('recipeForm').addEventListener('submit', function(e) {
+        if (selectedIngredients.length === 0) {
+            e.preventDefault();
+            alert('Please select at least one ingredient.');
+            return;
+        }
+    });
+
+    // Initialize filter
+    toggleDrinkType();
+</script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.bg-pink { background-color: #e91e63 !important; }
+.badge-sm { padding: 0.25em 0.5em; font-size: 0.75rem; }
+</style>
+{% endblock %}

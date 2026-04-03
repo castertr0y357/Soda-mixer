@@ -1,0 +1,1 @@
+"""Flavors app for Soda Mixer."""

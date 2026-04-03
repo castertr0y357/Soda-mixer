@@ -1,0 +1,492 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Home - Beverage Laboratory{% endblock %}
+
+{% block content %}
+<div class="row mb-4 py-4">
+    <div class="col-12 text-center">
+        <h1 class="display-3 fw-bold text-white mb-2">BEVERAGE <span class="text-gradient-lab">LABORATORY</span></h1>
+        <p class="text-muted fs-5">Advanced synthesis for the modern household scientist.</p>
+        
+        <div class="d-flex justify-content-center gap-2 mt-4">
+            <button type="button" id="modeSoda" class="btn btn-lg btn-glass-toggle px-4 active" onclick="setLabMode('SODA')">
+                <i class="bi bi-water"></i> Soda Lab
+            </button>
+            <button type="button" id="modeCoffee" class="btn btn-lg btn-glass-toggle px-4" onclick="setLabMode('COFFEE')">
+                <i class="bi bi-cup-hot"></i> Coffee Lab
+            </button>
+            <button type="button" id="modeSlushie" class="btn btn-lg btn-glass-toggle px-4" onclick="setLabMode('SLUSHIE')">
+                <i class="bi bi-snow"></i> Cryo Lab
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="glass-surface p-4 mb-4">
+            <div class="d-flex align-items-center gap-3 mb-4">
+                <div class="bg-primary bg-opacity-10 p-3 rounded-circle text-gradient-lab">
+                    <i class="bi bi-flask fs-3"></i>
+                </div>
+                <div>
+                    <h3 class="mb-0" id="mixerTitle">Soda Synthesis</h3>
+                    <p class="text-dim mb-0" id="mixerSubtitle">Assemble your molecular components.</p>
+                </div>
+            </div>
+            
+            <form id="mixerForm" action="{% url 'create_recipe' %}" method="POST">
+                {% csrf_token %}
+                <input type="hidden" name="drink_type" id="drinkTypeField" value="SODA">
+                
+                <div class="mb-4" id="selectedArea" style="display: none;">
+                    <label class="readout-label mb-2">Current Compound</label>
+                    <div class="d-flex flex-wrap gap-3" id="selectedIngredientsList"></div>
+                    
+                    {% if recipes %}
+                    <div class="mt-4 pt-3 border-top border-white border-opacity-10">
+                        <label class="readout-label mb-2">Related Notebook Entries</label>
+                        <div id="similarRecipes" class="d-flex flex-wrap gap-2"></div>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div id="stepContainer" class="p-4 rounded-4 bg-dark bg-opacity-25 border border-white border-opacity-5">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h5 class="fw-bold mb-0 text-gradient-lab" id="stepTitle">Step 1: Select Base Component</h5>
+                        <button type="button" class="btn btn-sm btn-outline-secondary border-0" id="resetBtn" style="display: none;" onclick="resetMixer()">
+                            <i class="bi bi-arrow-counterclockwise"></i> Reset Lab
+                        </button>
+                    </div>
+                    
+                    <div class="row g-3" id="availableIngredients">
+                        {% for ingredient in ingredients %}
+                        <div class="col-md-4 col-sm-6 ingredient-card" data-type="{{ ingredient.ingredient_type }}">
+                            <div class="glass-card p-3 h-100 d-flex flex-column align-items-center justify-content-center text-center cursor-pointer"
+                                 onclick="selectIngredient({{ ingredient.id }}, '{{ ingredient.name|escapejs }}', {{ ingredient.intensity }}, '{{ ingredient.category }}')">
+                                <span class="fw-bold fs-5 mb-2">{{ ingredient.name }}</span>
+                                <span class="badge-fizz bg-{{ ingredient.category }}">{{ ingredient.category }}</span>
+                            </div>
+                        </div>
+                        {% empty %}
+                        <div class="col-12 text-center py-5">
+                            <i class="bi bi-box-seam fs-1 text-dim mb-3 d-block"></i>
+                            <p class="text-muted">No materials detected in inventory.</p>
+                            <a href="{% url 'ingredient_list' %}" class="btn btn-outline-primary btn-sm">Catalog Materials</a>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                
+                <div class="mt-5 pt-4 border-top border-white border-opacity-10" style="display: none;" id="formSubmitArea">
+                    <div class="row align-items-end g-3">
+                        <div class="col-md-7" id="recipeNameInput">
+                            <label class="readout-label mb-2">Finalize Formula Name</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control bg-dark border-white border-opacity-10 text-white" 
+                                       name="name" id="recipeNameField" placeholder="Enter a name..." required>
+                                <button class="btn btn-outline-secondary border-white border-opacity-10" type="button" id="suggestBtn" onclick="fetchSuggestName()">
+                                    <i class="bi bi-magic text-gradient-lab"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-5">
+                            <button type="button" class="btn btn-primary w-100 py-3" onclick="interceptAndSave()">
+                                <i class="bi bi-journal-plus"></i> Index into Notebook
+                            </button>
+                        </div>
+                    </div>
+                    <p class="text-dim small mt-2 d-flex align-items-center gap-2">
+                        <i class="bi bi-info-circle"></i> This experiment will be auto-indexed in history.
+                    </p>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <!-- Hall of Fame Card -->
+        <div class="glass-surface overflow-hidden mb-4 border-lab">
+            <div class="px-4 py-3 border-bottom border-white border-opacity-10 d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-activity text-gradient-lab"></i>
+                    <h5 class="mb-0">Lab Realtime</h5>
+                </div>
+                <span class="badge rounded-pill bg-success bg-opacity-10 text-success small">LIVE</span>
+            </div>
+            <div class="p-4">
+                <div class="row g-3">
+                    <div class="col-12">
+                        <div class="readout-card">
+                            <div class="readout-label">MVP Substance</div>
+                            <div class="fs-5 fw-bold text-gradient-lab" id="statMvp"></div>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <div class="readout-card" style="border-left-color: var(--berry-punch);">
+                            <div class="readout-label">Leading Profile</div>
+                            <div class="fs-5 fw-bold" style="color: var(--berry-punch);" id="statTopCategory"></div>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <div class="readout-card" style="border-left-color: var(--fizz-cyan);">
+                            <div class="readout-label">Signature Formula</div>
+                            <div class="fs-5 fw-bold" id="statSignatureMix"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Notebook Entries -->
+        <div class="glass-surface p-4 mb-4">
+            <h6 class="readout-label mb-3">Recent Lab Records</h6>
+            {% for recipe in recipes %}
+            <div class="recent-recipe-card mb-3 pb-2 border-bottom border-white border-opacity-5" data-drink-type="{{ recipe.drink_type }}">
+                <div class="d-flex justify-content-between align-items-start mb-1">
+                    <h6 class="mb-0"><a href="{% url 'recipe_detail' recipe.id %}" class="text-decoration-none text-white hover-lime">{{ recipe.name }}</a></h6>
+                    <span class="badge border border-white border-opacity-10 text-dim" style="font-size: 0.6rem;">{{ recipe.get_drink_type_display }}</span>
+                </div>
+                <small class="text-dim" style="font-size: 0.75rem;">
+                    Analyzed {{ recipe.updated_at|timesince }} ago
+                </small>
+            </div>
+            {% empty %}
+            <p class="text-dim small">No system-wide records available.</p>
+            {% endfor %}
+            <div id="noRecentRecipesMsg" style="display: none;">
+                <p class="text-dim small mb-0 pt-2">No recent formulas found for this laboratory mode.</p>
+            </div>
+            <div class="d-grid mt-3">
+                <a href="{% url 'recipe_list' %}" class="btn btn-outline-secondary btn-sm border-white border-opacity-10 text-white">Full Archive</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentLabMode = 'SODA';
+    let selectedIngredients = []; 
+    let allIngredientsHtml = ''; 
+    let originalRecipesHtml = '';
+    const themeStats = JSON.parse('{{ stats_json|escapejs }}');
+
+    document.addEventListener('DOMContentLoaded', function() {
+        allIngredientsHtml = document.getElementById('availableIngredients').innerHTML;
+        const simRes = document.getElementById('similarRecipes');
+        if (simRes) {
+            originalRecipesHtml = simRes.innerHTML;
+        }
+        
+        // Initialize from localStorage
+        const savedMode = localStorage.getItem('lab_mode') || 'SODA';
+        setLabMode(savedMode, true); 
+    });
+
+    function setLabMode(mode, isInit = false) {
+        currentLabMode = mode;
+        selectedIngredients = [];
+        
+        // Save to storage
+        localStorage.setItem('lab_mode', mode);
+        
+        // Toggle Global Theme Class
+        document.documentElement.classList.remove('theme-coffee', 'theme-slushie');
+        if (mode === 'COFFEE') {
+            document.documentElement.classList.add('theme-coffee');
+        } else if (mode === 'SLUSHIE') {
+            document.documentElement.classList.add('theme-slushie');
+        }
+
+        // Update Buttons
+        document.getElementById('modeSoda').classList.toggle('active', mode === 'SODA');
+        document.getElementById('modeCoffee').classList.toggle('active', mode === 'COFFEE');
+        document.getElementById('modeSlushie').classList.toggle('active', mode === 'SLUSHIE');
+        
+        // Update Filtered Ingredients
+        const cards = document.querySelectorAll('.ingredient-card');
+        cards.forEach(card => {
+            const type = card.getAttribute('data-type');
+            if (mode === 'SODA') {
+                card.style.display = (type === 'SODA_SYRUP' || type === 'ADDITIVE' || type === 'OTHER') ? 'block' : 'none';
+            } else if (mode === 'COFFEE') {
+                card.style.display = (type === 'COFFEE_BEAN' || type === 'ADDITIVE' || type === 'OTHER') ? 'block' : 'none';
+            } else if (mode === 'SLUSHIE') {
+                card.style.display = (type === 'SODA_SYRUP' || type === 'ADDITIVE' || type === 'OTHER') ? 'block' : 'none';
+            }
+        });
+        
+        // Update UI Text
+        if (mode === 'SODA') {
+            document.getElementById('mixerTitle').textContent = 'Soda Synthesis';
+            document.getElementById('mixerSubtitle').textContent = 'Assemble your flavor payloads.';
+        } else if (mode === 'COFFEE') {
+            document.getElementById('mixerTitle').textContent = 'Coffee Extraction Lab';
+            document.getElementById('mixerSubtitle').textContent = 'Select your bean and extraction modifiers.';
+        } else if (mode === 'SLUSHIE') {
+            document.getElementById('mixerTitle').textContent = 'Cryo-Slushie Lab';
+            document.getElementById('mixerSubtitle').textContent = 'Optimize Ninja-compatible freezing ratios.';
+        }
+        document.getElementById('drinkTypeField').value = mode;
+        
+        // Update Hall of Fame Stats
+        const currentStats = themeStats[mode] || { mvp_ingredient: '-', top_category: '-', signature_mix_name: '-' };
+        document.getElementById('statMvp').textContent = currentStats.mvp_ingredient;
+        document.getElementById('statTopCategory').textContent = currentStats.top_category;
+        
+        const mixContainer = document.getElementById('statSignatureMix');
+        if (currentStats.signature_mix_url) {
+            mixContainer.innerHTML = `<a href="${currentStats.signature_mix_url}" class="text-decoration-none text-white hover-lime">${currentStats.signature_mix_name}</a>`;
+        } else {
+            mixContainer.textContent = currentStats.signature_mix_name;
+        }
+        
+        // Filter Recent Recipes to 5 matching the theme
+        const recentCards = document.querySelectorAll('.recent-recipe-card');
+        let visibleCount = 0;
+        recentCards.forEach(card => {
+            if (card.getAttribute('data-drink-type') === mode && visibleCount < 5) {
+                card.style.display = 'block';
+                visibleCount++;
+            } else {
+                card.style.display = 'none';
+            }
+        });
+        
+        const noRecordsMsg = document.getElementById('noRecentRecipesMsg');
+        if (noRecordsMsg) {
+            noRecordsMsg.style.display = visibleCount === 0 ? 'block' : 'none';
+        }
+        
+        resetMixer();
+    }
+
+    function getBadgeColor(category) {
+        return `bg-${category}`;
+    }
+
+    function selectIngredient(id, name, intensity, category) {
+        selectedIngredients.push({id: id, name: name, intensity: intensity, category: category});
+        document.getElementById('resetBtn').style.display = 'block';
+        updateSelectedArea();
+        fetchRecommendations();
+    }
+
+    function resetMixer() {
+        selectedIngredients = [];
+        document.getElementById('stepContainer').style.display = 'block';
+        document.getElementById('resetBtn').style.display = 'none';
+        document.getElementById('stepTitle').textContent = 'Step 1: Select Base Component';
+        updateSelectedArea();
+    }
+
+    function fetchRecommendations() {
+        const ingredientIds = selectedIngredients.map(i => i.id);
+        
+        if (ingredientIds.length >= 3) {
+            document.getElementById('stepContainer').style.display = 'none';
+            updateSelectedArea(true);
+            return;
+        }
+
+        const stepText = ingredientIds.length === 1 ? 'Step 2: Select Complementary Payload' : 'Step 3: Select Stabilizer (Optional)';
+        document.getElementById('stepTitle').textContent = stepText;
+        document.getElementById('availableIngredients').innerHTML = '<div class="col-12 text-center py-4"><div class="spinner-border text-gradient-lab" role="status"></div><p class="mt-2 text-dim">Computing molecular affinity...</p></div>';
+
+        fetch('/api/recommendations/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                ingredient_ids: ingredientIds,
+                drink_type: currentLabMode
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('availableIngredients');
+            container.innerHTML = '';
+            
+            if (!data.recommended || data.recommended.length === 0) {
+                container.innerHTML = '<div class="col-12 text-center py-4"><p class="text-muted">No ideal matches in lab inventory. <button type="button" class="btn btn-link px-0 text-gradient-lab" onclick="skipOptimization()">Seal current mix</button>.</p></div>';
+                return;
+            }
+            
+            data.recommended.forEach(rec => {
+                const badgeClass = getBadgeColor(rec.category);
+                container.innerHTML += `
+                    <div class="col-md-4 col-sm-6">
+                        <div class="glass-card p-3 h-100 d-flex flex-column align-items-center justify-content-center text-center cursor-pointer border-success border-opacity-25"
+                                 onclick="selectIngredient(${rec.id}, '${rec.name.replace(/'/g, "\\'")}', ${rec.intensity}, '${rec.category}')">
+                                <span class="fw-bold fs-5 mb-1">${rec.name}</span>
+                                <span class="badge-fizz ${badgeClass} mb-2">${rec.category}</span>
+                                <small class="text-gradient-lab fw-bold" style="font-size: 0.7rem;">${rec.reason}</small>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            if (ingredientIds.length === 2) {
+                container.innerHTML += `
+                    <div class="col-md-4 col-sm-6">
+                        <div class="glass-card p-3 h-100 d-flex flex-column align-items-center justify-content-center text-center cursor-pointer border-white border-opacity-10" onclick="skipOptimization()">
+                            <i class="bi bi-shield-check fs-3 mb-1 text-success"></i>
+                            <span class="fw-bold small text-uppercase">Seal Mix</span>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Render recipes
+            if (data.recipes && data.recipes.length > 0) {
+                const recContainer = document.getElementById('similarRecipes');
+                if (recContainer) {
+                    let recHtml = '';
+                    data.recipes.forEach(r => {
+                        recHtml += `
+                            <a href="/ingredients/recipes/${r.id}/" class="fizz-pill bg-dark bg-opacity-50 text-white text-decoration-none border-white border-opacity-10 hover-lime d-flex align-items-center gap-2">
+                                <i class="bi bi-journal-text small"></i> ${r.name}
+                            </a>`;
+                    });
+                    recContainer.innerHTML = recHtml;
+                }
+            }
+        });
+    }
+
+    function skipOptimization() {
+        document.getElementById('stepContainer').style.display = 'none';
+        updateSelectedArea(true);
+    }
+
+    function updateSelectedArea(isDone = false) {
+        const selectedArea = document.getElementById('selectedArea');
+        const list = document.getElementById('selectedIngredientsList');
+        const submitArea = document.getElementById('formSubmitArea');
+        
+        if (selectedIngredients.length === 0) {
+            selectedArea.style.display = 'none';
+            submitArea.style.display = 'none';
+            return;
+        }
+        
+        selectedArea.style.display = 'block';
+        let html = '<div class="row g-2 mb-3">';
+        let hiddenInputs = '';
+        const unit = currentLabMode === 'COFFEE' ? 'g' : 'ml';
+        
+        let totalSyrup = 0;
+        selectedIngredients.forEach((ing, index) => {
+            const role = index === 0 ? 'BASE' : (index === 1 ? 'SECOND' : 'FINAL');
+            let amount = 0;
+            if (currentLabMode === 'COFFEE') {
+                amount = index === 0 ? 18.0 : (index === 1 ? 5.0 : 2.0);
+            } else {
+                amount = index === 0 ? 2.0 : (index === 1 ? 1.0 : 0.5);
+            }
+            
+            if (currentLabMode === 'SLUSHIE' || currentLabMode === 'SODA') {
+                totalSyrup += amount;
+            }
+            
+            html += `
+                <div class="col-auto">
+                    <div class="glass-card p-2 text-center px-4" style="min-width: 130px;">
+                        <span class="readout-label d-block mb-1" style="font-size: 0.55rem;">${role}</span>
+                        <div class="fw-bold mb-1">${ing.name}</div>
+                        <div class="text-gradient-lab fw-black small">${amount}${unit}</div>
+                    </div>
+                </div>
+            `;
+            hiddenInputs += `<input type="hidden" name="ingredient_${ing.id}" value="${ing.id}">`;
+            hiddenInputs += `<input type="hidden" name="amount_${ing.id}" value="${amount}">`;
+        });
+        
+        html += '</div>';
+
+        // Ninja Ratio Logic for Slushies
+        if (currentLabMode === 'SLUSHIE') {
+            const targetRatio = 5; // 5 parts water to 1 part syrup
+            const requiredWater = totalSyrup * targetRatio;
+            const totalVolume = totalSyrup + requiredWater;
+            
+            html += `
+                <div class="glass-surface p-3 mb-3 border-lab border-opacity-50">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="readout-label mb-1">Ninja Ratio Monitor (5:1)</div>
+                            <div class="d-flex gap-4">
+                                <div>
+                                    <small class="text-dim d-block">Syrup Conc.</small>
+                                    <span class="fw-bold">${totalSyrup.toFixed(1)}oz</span>
+                                </div>
+                                <div>
+                                    <small class="text-dim d-block">Required Liquid</small>
+                                    <span class="text-gradient-lab fw-bold">${requiredWater.toFixed(1)}oz</span>
+                                </div>
+                                <div>
+                                    <small class="text-dim d-block">Total Yield</small>
+                                    <span class="fw-bold text-white">${totalVolume.toFixed(1)}oz</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-end">
+                            <i class="bi bi-snow2 fs-2 opacity-10"></i>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        if (isDone || selectedIngredients.length === 3) {
+            html += `<div class="alert bg-success bg-opacity-10 border border-success border-opacity-20 text-success small py-2">
+                        <i class="bi bi-check2-circle"></i> Formulation complete. Synthesis ready for indexing.
+                    </div>`;
+            html += hiddenInputs;
+            submitArea.style.display = 'block';
+        } else {
+            submitArea.style.display = 'none';
+        }
+        
+        list.innerHTML = html;
+    }
+
+    function fetchSuggestName() {
+        const btn = document.getElementById('suggestBtn');
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+        const ids = selectedIngredients.map(i => i.id);
+        fetch('/api/generate-name/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ingredient_ids: ids, drink_type: currentLabMode})
+        })
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('recipeNameField').value = data.name;
+            btn.innerHTML = '<i class="bi bi-magic"></i>';
+        });
+    }
+
+    function interceptAndSave() {
+        const data = {
+            drink_type: currentLabMode,
+            ingredients: selectedIngredients.map((ing, idx) => ({
+                id: ing.id,
+                amount: currentLabMode === 'SODA' 
+                    ? (idx === 0 ? 2.0 : (idx === 1 ? 1.0 : 0.5))
+                    : (idx === 0 ? 18.0 : (idx === 1 ? 5.0 : 2.0))
+            }))
+        };
+
+        fetch('/api/history/save/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        })
+        .finally(() => {
+            document.getElementById('mixerForm').submit();
+        });
+    }
+</script>
+
+{% endblock %}

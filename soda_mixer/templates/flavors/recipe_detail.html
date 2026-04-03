@@ -1,0 +1,307 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ recipe.name }} - Beverage Laboratory{% endblock %}
+
+{% block content %}
+<div class="mb-4 d-flex justify-content-between align-items-center">
+    <a href="{% url 'recipe_list' %}" class="btn btn-sm btn-outline-secondary border-0 text-dim">
+        <i class="bi bi-arrow-left"></i> Archive
+    </a>
+    <span class="badge border border-white border-opacity-10 py-2 px-3 text-gradient-lab">
+        {{ recipe.get_drink_type_display }} FORMULA
+    </span>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="glass-surface p-4 mb-4">
+            <div class="d-flex justify-content-between align-items-start mb-4">
+                <div>
+                    <h2 class="display-5 fw-bold mb-0 text-white">{{ recipe.name }}</h2>
+                    {% if recipe.description %}
+                    <p class="text-dim mt-2 lead" style="font-size: 1.1rem; line-height: 1.6;">{{ recipe.description }}</p>
+                    {% endif %}
+                </div>
+                <div class="print-hide d-flex gap-2">
+                    <button onclick="exportToMealie({{ recipe.id }})" class="btn btn-primary btn-sm text-dark fw-bold" id="mealieBtn" title="Sync to Mealie">
+                        <i class="bi bi-cloud-upload"></i> Push to Mealie
+                    </button>
+                    <button onclick="window.print()" class="btn btn-outline-secondary border-white border-opacity-10 text-white btn-sm" title="Print Formula">
+                        <i class="bi bi-printer"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="mb-4 print-hide d-flex align-items-center gap-3">
+                <div id="ratingUI" class="bg-dark bg-opacity-25 px-3 py-2 rounded-pill border border-white border-opacity-5">
+                    {% for i in "12345" %}
+                    <i class="bi {% if forloop.counter <= recipe.rating %}bi-star-fill text-warning{% else %}bi-star text-muted{% endif %} rating-star fs-4"
+                       data-rating="{{ forloop.counter }}"
+                       style="cursor: pointer; {% if forloop.counter <= recipe.rating %}filter: drop-shadow(0 0 5px var(--fizz-orange));{% endif %}"
+                       onclick="rateRecipe({{ recipe.id }}, {{ forloop.counter }})"></i>
+                    {% endfor %}
+                    <span class="readout-label ms-2" id="ratingText">{% if recipe.rating > 0 %}{{ recipe.rating }} STARS{% else %}UNRATED{% endif %}</span>
+                </div>
+            </div>
+
+            {% if recipe.drink_type == 'COFFEE' %}
+            <!-- Extraction Parameters (Coffee Specific) -->
+            <div class="row g-3 mb-5">
+                <div class="col-md-3">
+                    <div class="readout-card text-center">
+                        <div class="readout-label">METHOD</div>
+                        <div class="fw-bold text-white fs-5">{{ recipe.get_brew_method_display }}</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="readout-card text-center">
+                        <div class="readout-label">GRIND</div>
+                        <div class="fw-bold text-white fs-5">{{ recipe.get_grind_size_display }}</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="readout-card text-center">
+                        <div class="readout-label">TEMP</div>
+                        <div class="fw-bold text-white fs-5">{{ recipe.water_temp_c }}°C <small class="text-dim">/ {{ recipe.water_temp_f }}°F</small></div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="readout-card text-center">
+                        <div class="readout-label">EXTRACTION</div>
+                        <div class="fw-bold text-white fs-5">{{ recipe.brew_time_sec }}s</div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="pb-3 mb-4 border-bottom border-white border-opacity-10">
+                <h5 class="text-gradient-lab mb-0">Molecular Component Specs</h5>
+            </div>
+                
+            <div class="row g-3 mb-5">
+                {% for ri in recipe.recipe_ingredients.all %}
+                <div class="col-md-6">
+                    <div class="glass-card p-3 border-white border-opacity-10 bg-dark bg-opacity-25 h-100">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div class="fw-bold fs-5">{{ ri.ingredient.name }}</div>
+                            <span class="badge-fizz bg-{{ ri.ingredient.category }}">{{ ri.ingredient.category }}</span>
+                        </div>
+                        
+                        {% if recipe.drink_type == 'COFFEE' and ri.ingredient.ingredient_type == 'COFFEE_BEAN' %}
+                        <div class="mb-3 small text-dim">
+                            <div class="d-flex justify-content-between"><span>Origin:</span> <span>{{ ri.ingredient.origin }}</span></div>
+                            <div class="d-flex justify-content-between"><span>Roast:</span> <span>{{ ri.ingredient.get_roast_level_display }}</span></div>
+                            <div class="d-flex justify-content-between"><span>Process:</span> <span>{{ ri.ingredient.process }}</span></div>
+                        </div>
+                        {% endif %}
+
+                        <div class="d-flex justify-content-between align-items-center mt-auto">
+                            <div class="readout-card p-1 ps-2 border-primary border-opacity-50 flex-grow-1 me-2">
+                                <div class="readout-label" style="font-size: 0.6rem;">UNIT MASS</div>
+                                <div class="fw-bold">{{ ri.amount|floatformat:1 }} {% if recipe.drink_type == 'SODA' %}ml{% else %}g{% endif %}</div>
+                            </div>
+                            <div class="readout-card p-1 ps-2 border-warning border-opacity-50 flex-grow-1">
+                                <div class="readout-label" style="font-size: 0.6rem;">INTENSITY</div>
+                                <div class="fw-bold text-warning">{{ ri.ingredient.intensity }}/5</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="col-12"><p class="text-dim">No base components identified in formula.</p></div>
+                {% endfor %}
+            </div>
+
+            <div class="glass-card mb-4 p-4 border-white border-opacity-10 bg-primary bg-opacity-5">
+                <h5 class="text-gradient-lab mb-4">Extraction Analysis</h5>
+                <div class="row g-4">
+                    <div class="col-md-4">
+                        <label class="readout-label mb-2">Sweetness</label>
+                        <div class="fs-4 fw-bold text-white mb-2">{{ stats.sweetness }}/5.0</div>
+                        <div class="progress bg-white bg-opacity-5" style="height: 6px; border-radius: 100px;">
+                            <div class="progress-bar" role="progressbar" style="width: {% widthratio stats.sweetness 5 100 %}%; background: var(--berry-punch); box-shadow: 0 0 10px var(--berry-punch);"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="readout-label mb-2">Acidity</label>
+                        <div class="fs-4 fw-bold text-white mb-2">{{ stats.acidity }}/5.0</div>
+                        <div class="progress bg-white bg-opacity-5" style="height: 6px; border-radius: 100px;">
+                            <div class="progress-bar" role="progressbar" style="width: {% widthratio stats.acidity 5 100 %}%; background: var(--citrus-yellow); box-shadow: 0 0 10px var(--citrus-yellow);"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="readout-label mb-2">Bitterness</label>
+                        <div class="fs-4 fw-bold text-white mb-2">{{ stats.bitterness }}/5.0</div>
+                        <div class="progress bg-white bg-opacity-5" style="height: 6px; border-radius: 100px;">
+                            <div class="progress-bar bg-dark" role="progressbar" style="width: {% widthratio stats.bitterness 5 100 %}%;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="glass-surface p-4 mb-4">
+            <h6 class="readout-label mb-3">Formula Metadata</h6>
+            <div class="mb-3">
+                <small class="text-dim d-block fw-bold" style="font-size: 0.6rem;">INDEX DATE</small>
+                <div class="text-white">{{ recipe.created_at|date:"M d, Y" }}</div>
+            </div>
+            <div class="mb-0">
+                <small class="text-dim d-block fw-bold" style="font-size: 0.6rem;">LAST MODIFIED</small>
+                <div class="text-white">{{ recipe.updated_at|date:"M d, Y" }}</div>
+            </div>
+        </div>
+        
+        <div class="glass-surface p-4 mb-4">
+            <h6 class="readout-label mb-3">Lab Controls</h6>
+            <div class="d-grid gap-2">
+                <a href="{% url 'edit_recipe' recipe.id %}" class="btn btn-outline-primary w-100">
+                    <i class="bi bi-pencil-square"></i> Modify Formula
+                </a>
+                <form action="{% url 'delete_recipe' recipe.id %}" method="POST" class="w-100">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-danger w-100 border-0" onclick="return confirm('Decommission this formula permanently?')">
+                        <i class="bi bi-trash"></i> Decommission
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="glass-surface p-4 mb-4" id="categoryArea">
+            <h6 class="readout-label mb-3">Classification Tags</h6>
+            <div class="d-flex flex-wrap gap-2 mb-3" id="categoryTags">
+                {% for cat in recipe.categories.all %}
+                <span class="badge-fizz {{ cat.color }}" id="catTag{{ cat.id }}">{{ cat.name }}</span>
+                {% empty %}
+                <span class="text-dim small">No tags assigned.</span>
+                {% endfor %}
+            </div>
+            <button class="btn btn-sm btn-outline-secondary w-100 border-white border-opacity-10" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#categoryEditor">
+                <i class="bi bi-tags"></i> Edit Tags
+            </button>
+            <div class="collapse mt-3 p-3 glass-card border-white border-opacity-10" id="categoryEditor">
+                <div class="d-flex flex-wrap gap-2 mb-4" id="catCheckList">
+                    {% for cat in all_categories %}
+                    <div class="form-check p-0 mb-0 d-flex align-items-center gap-2">
+                        <input type="checkbox" class="neon-check recipe-cat-check" id="rcat{{ cat.id }}" value="{{ cat.id }}"
+                               {% if cat in recipe.categories.all %}checked{% endif %}>
+                        <label class="form-check-label readout-label mb-0" for="rcat{{ cat.id }}" style="font-size: 0.6rem;">
+                            {{ cat.name }}
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+                <button class="btn btn-primary btn-sm w-100" onclick="saveRecipeCategories({{ recipe.id }})">
+                    Submit Updates
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+@media print {
+    .print-hide { display: none !important; }
+    .glass-surface { border: none !important; background: white !important; color: black !important; }
+    .text-dim { color: #666 !important; }
+    .text-white { color: black !important; }
+    .text-gradient-lab { color: #558b2f !important; -webkit-text-fill-color: initial !important; }
+    .col-lg-4 { display: none !important; }
+    .col-lg-8 { width: 100% !important; max-width: 100% !important; flex: 0 0 100% !important; }
+    body { background: white !important; }
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function rateRecipe(recipeId, rating) {
+    fetch(`/api/recipes/${recipeId}/rate/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({ rating: rating })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (!data.error) {
+            const stars = document.querySelectorAll('.rating-star');
+            stars.forEach(star => {
+                const starRating = parseInt(star.getAttribute('data-rating'));
+                if (starRating <= rating) {
+                    star.classList.remove('bi-star', 'text-muted');
+                    star.classList.add('bi-star-fill', 'text-warning');
+                } else {
+                    star.classList.remove('bi-star-fill', 'text-warning');
+                    star.classList.add('bi-star', 'text-muted');
+                }
+            });
+            document.getElementById('ratingText').textContent = `${rating} Stars`;
+        }
+    });
+}
+
+function saveRecipeCategories(recipeId) {
+    const categoryIds = [...document.querySelectorAll('.recipe-cat-check:checked')]
+        .map(el => parseInt(el.value));
+
+    fetch(`/api/recipes/${recipeId}/categories/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({category_ids: categoryIds})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === 'updated') {
+            window.location.reload();
+        }
+    });
+}
+
+function exportToMealie(recipeId) {
+    const btn = document.getElementById('mealieBtn');
+    const originalHtml = btn.innerHTML;
+    
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Pushing...';
+    
+    fetch(`/api/recipes/${recipeId}/export/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}'
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        if (data.status === 'success') {
+            btn.innerHTML = '<i class="bi bi-check-lg"></i> Synced!';
+            btn.classList.replace('btn-primary', 'btn-success');
+            setTimeout(() => {
+                btn.innerHTML = originalHtml;
+                btn.classList.replace('btn-success', 'btn-primary');
+            }, 3000);
+        } else {
+            btn.innerHTML = originalHtml;
+            alert(data.error);
+        }
+    })
+    .catch(err => {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+        alert("A network error occurred while contacting the laboratory server.");
+    });
+}
+</script>
+{% endblock %}

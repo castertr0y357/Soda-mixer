@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ ingredient.name }} - Beverage Laboratory{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{% url 'ingredient_list' %}" class="btn btn-sm btn-outline-secondary border-0 text-dim">
+        <i class="bi bi-arrow-left"></i> Materiel Inventory
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-lg-6">
+        <div class="glass-surface p-4 mb-4 border-lab h-100">
+            <div class="d-flex justify-content-between align-items-start mb-4">
+                <h2 class="display-5 fw-bold mb-0 text-white">{{ ingredient.name }}</h2>
+                <div class="d-flex flex-column align-items-end gap-1">
+                    <span class="badge-fizz bg-{{ ingredient.category }} fs-5 px-3 py-2">{{ ingredient.category }}</span>
+                    <span class="badge border border-white border-opacity-10 text-dim" style="font-size: 0.6rem;">{{ ingredient.get_ingredient_type_display }}</span>
+                </div>
+            </div>
+            
+            <div class="mb-5">
+                <label class="readout-label mb-3">POTENCY LEVEL</label>
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <div class="text-warning d-flex gap-2 fs-3">
+                        {% for i in "12345" %}
+                            <i class="bi {% if forloop.counter <= ingredient.intensity %}bi-star-fill{% else %}bi-star{% endif %}" 
+                               style="{% if forloop.counter <= ingredient.intensity %}filter: drop-shadow(0 0 10px var(--fizz-orange)); opacity: 1;{% else %}opacity: 0.2;{% endif %}"></i>
+                        {% endfor %}
+                    </div>
+                </div>
+                <p class="text-dim small ps-1">Measured on the standard laboratory intensity scale (1-5).</p>
+            </div>
+
+            {% if ingredient.ingredient_type == 'COFFEE_BEAN' %}
+            <div class="row g-3 mb-5">
+                <div class="col-md-6">
+                    <div class="readout-card">
+                        <div class="readout-label">ORIGIN</div>
+                        <div class="fw-bold text-white">{{ ingredient.origin|default:"-" }}</div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="readout-card">
+                        <div class="readout-label">ROAST</div>
+                        <div class="fw-bold text-white">{{ ingredient.get_roast_level_display|default:"-" }}</div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="readout-card">
+                        <div class="readout-label">PROCESS</div>
+                        <div class="fw-bold text-white">{{ ingredient.process|default:"-" }}</div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="readout-card">
+                        <div class="readout-label">ROASTER</div>
+                        <div class="fw-bold text-white">{{ ingredient.roaster|default:"-" }}</div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <div class="row g-4 mb-2">
+                {% if ingredient.description %}
+                <div class="col-12">
+                    <label class="readout-label mb-2">SENSORY OBSERVATIONS</label>
+                    <div class="p-3 rounded bg-dark bg-opacity-25 border border-white border-opacity-5 text-dim" style="line-height: 1.6;">
+                        {{ ingredient.description }}
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if ingredient.flavor_notes %}
+                <div class="col-12">
+                    <label class="readout-label mb-2">MOLECULAR PROFILE</label>
+                    <p class="text-white">{{ ingredient.flavor_notes }}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-6">
+        <div class="glass-surface p-4 h-100">
+            <div class="d-flex align-items-center gap-2 mb-4">
+                <i class="bi bi-diagram-3 text-gradient-lab"></i>
+                <h5 class="mb-0">Molecular Affinity</h5>
+            </div>
+            
+            <p class="text-dim small mb-4">Synthesized molecular compatibility based on sensory profile overlap.</p>
+            
+            {% if compatible %}
+            <div class="row g-3">
+                {% for compat in compatible %}
+                <div class="col-12">
+                    <a href="{% url 'ingredient_detail' compat.id %}" class="glass-card p-3 d-flex justify-content-between align-items-center text-decoration-none border-white border-opacity-10 hover-lime">
+                        <span class="fw-bold text-white">{{ compat.name }}</span>
+                        <span class="badge-fizz bg-{{ compat.category }}">{{ compat.category }}</span>
+                    </a>
+                </div>
+                {% empty %}
+                <div class="col-12"><p class="text-dim">No compatible pairings identified.</p></div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-dim italic">Insufficient data for affinity analysis.</p>
+            {% endif %}
+
+            <div class="mt-5 p-4 glass-card border-white border-opacity-5 bg-primary bg-opacity-5">
+                <h6 class="readout-label mb-3">Lab Protocols</h6>
+                <ul class="list-unstyled mb-0 small text-dim">
+                    <li class="mb-2 d-flex gap-2"><i class="bi bi-shield-check text-gradient-lab"></i> Ensure clean equipment for pure extraction.</li>
+                    <li class="mb-2 d-flex gap-2"><i class="bi bi-shield-check text-gradient-lab"></i> Monitor temperature variance closely.</li>
+                    <li class="mb-0 d-flex gap-2"><i class="bi bi-shield-check text-gradient-lab"></i> Document all sensory anomalies.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-5 mb-5">
+    <div class="col-12 text-center">
+        <a href="{% url 'home' %}" class="btn btn-primary btn-lg px-5 py-3">
+            <i class="bi bi-flask"></i> Begin Synthesis with {{ ingredient.name }}
+        </a>
+    </div>
+</div>
+{% endblock %}

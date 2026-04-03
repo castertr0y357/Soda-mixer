@@ -1,0 +1,334 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
+
+:root {
+    /* Base HSL Color Tokens */
+    --fizz-lime: hsl(82, 90%, 60%);
+    --fizz-cyan: hsl(180, 95%, 55%);
+    --fizz-mocha: hsl(28, 60%, 45%);
+    --fizz-amber: hsl(38, 90%, 60%);
+    
+    --berry-punch: hsl(330, 95%, 65%);
+    --fizz-orange: hsl(30, 100%, 60%);
+    --citrus-yellow: hsl(50, 100%, 50%);
+    --herbal-green: hsl(140, 70%, 50%);
+    --spice-red: hsl(0, 85%, 55%);
+    --sweet-lavender: hsl(270, 85%, 75%);
+    --sour-lime: hsl(65, 100%, 50%);
+    
+    /* Dark Mode Deep Slate Palette */
+    --bg-deep: hsl(225, 30%, 7%);
+    --bg-base: hsl(225, 25%, 12%);
+    --glass-surface: hsla(225, 25%, 18%, 0.7);
+    --glass-border: hsla(0, 0%, 100%, 0.12);
+    --glass-highlight: hsla(0, 0%, 100%, 0.05);
+    
+    --text-primary: hsl(0, 0%, 98%);
+    --text-muted: hsl(225, 20%, 90%);
+    --text-dim: hsl(225, 15%, 80%);
+
+    /* Defaults - Soda Theme */
+    --lab-accent: var(--fizz-lime);
+    --lab-accent-secondary: var(--fizz-cyan);
+    --lab-accent-glow: hsla(82, 90%, 60%, 0.4);
+    --lab-gradient: linear-gradient(135deg, var(--fizz-lime), var(--fizz-cyan));
+}
+
+/* Theme Overrides */
+.theme-coffee {
+    --lab-accent: var(--fizz-amber);
+    --lab-accent-secondary: var(--fizz-mocha);
+    --lab-accent-glow: hsla(38, 90%, 60%, 0.4);
+    --lab-gradient: linear-gradient(135deg, var(--fizz-amber), var(--fizz-mocha));
+}
+
+.theme-slushie {
+    --lab-accent: hsl(200, 95%, 65%);
+    --lab-accent-secondary: hsl(185, 80%, 45%);
+    --lab-accent-glow: hsla(200, 95%, 65%, 0.4);
+    --lab-gradient: linear-gradient(135deg, hsl(200, 95%, 65%), hsl(185, 80%, 45%));
+}
+
+/* Global Reset & Theme */
+body {
+    background: radial-gradient(circle at top left, var(--bg-base), var(--bg-deep));
+    background-attachment: fixed;
+    color: var(--text-primary);
+    font-family: 'Outfit', sans-serif;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    transition: background 1s ease;
+}
+
+/* Glassmorphism Classes */
+.glass-surface {
+    background: var(--glass-surface);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border);
+    border-radius: 24px;
+    box-shadow: 0 12px 40px hsla(0, 0%, 0%, 0.4);
+}
+
+.glass-card {
+    background: var(--glass-highlight);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card:hover {
+    background: hsla(0, 0%, 100%, 0.08);
+    transform: translateY(-4px);
+    border-color: hsla(0, 0%, 100%, 0.25);
+    box-shadow: 0 8px 24px hsla(0, 0%, 0%, 0.5);
+}
+
+/* Typography Enhancements */
+h1, h2, h3, h4, h5, h6 {
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+.text-gradient-lab {
+    background: var(--lab-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* Mode Selectors */
+.btn-glass-toggle {
+    background: rgba(255, 255, 255, 0.08);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.6);
+    border-radius: 14px;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    font-weight: 600;
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-glass-toggle:hover {
+    border-color: rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.8);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.btn-glass-toggle.active {
+    background: var(--lab-gradient);
+    border-color: transparent;
+    color: var(--bg-deep);
+    box-shadow: 0 8px 25px var(--lab-accent-glow);
+    transform: scale(1.05);
+}
+
+/* Mixer Components */
+.fizz-pill {
+    border-radius: 100px;
+    padding: 0.6rem 1.2rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 2px solid transparent;
+}
+
+.fizz-pill.active {
+    background: var(--lab-accent);
+    color: var(--bg-deep);
+    box-shadow: 0 0 20px var(--lab-accent-glow);
+}
+
+/* Custom Checkbox as Neon Toggle */
+.neon-check {
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    border: 2px solid var(--glass-border);
+    appearance: none;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+.neon-check:checked {
+    background: var(--lab-accent);
+    box-shadow: 0 0 10px var(--lab-accent);
+}
+
+/* Hall of Fame Readouts */
+.readout-card {
+    background: hsla(0, 0%, 0%, 0.2);
+    border-left: 3px solid var(--lab-accent);
+    padding: 1rem;
+    border-radius: 0 12px 12px 0;
+}
+
+.readout-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--text-dim) !important;
+    opacity: 1 !important;
+}
+
+.border-lab {
+    border: 1px solid var(--lab-accent) !important;
+}
+
+/* Category Badges (Premium) */
+.badge-fizz {
+    padding: 0.4em 0.8em;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+}
+
+/* Bootstrap Overrides (Glass Style) */
+.card {
+    background: var(--glass-surface);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    color: var(--text-primary);
+}
+
+.card-header {
+    background: hsla(0, 0%, 100%, 0.05);
+    border-bottom: 1px solid var(--glass-border);
+    font-weight: 700;
+}
+
+.btn-primary {
+    background: var(--lab-gradient);
+    border: none;
+    color: var(--bg-deep);
+    font-weight: 700;
+    border-radius: 12px;
+    padding: 0.8rem 1.5rem;
+}
+
+.btn-outline-primary {
+    border: 2px solid var(--lab-accent);
+    color: var(--lab-accent);
+    border-radius: 12px;
+}
+
+.btn-outline-primary:hover {
+    background: var(--lab-accent);
+    color: var(--bg-deep);
+    box-shadow: 0 0 15px var(--lab-accent-glow);
+}
+
+.navbar {
+    background: hsla(225, 30%, 7%, 0.9) !important;
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--glass-border);
+}
+
+.navbar-dark .navbar-nav .nav-link {
+    color: var(--text-dim);
+    font-weight: 500;
+}
+
+.navbar-dark .navbar-nav .nav-link:hover {
+    color: var(--text-primary);
+}
+
+.navbar-dark .navbar-nav .nav-link.active {
+    color: var(--lab-accent) !important;
+}
+
+/* Sidebar Nav Pills (Settings) */
+.nav-pills .nav-link {
+    color: var(--text-dim);
+    border-radius: 12px;
+    transition: all 0.2s ease;
+}
+
+.nav-pills .nav-link:hover {
+    background: hsla(0, 0%, 100%, 0.05);
+    color: var(--text-primary);
+}
+
+.nav-pills .nav-link.active {
+    background: var(--lab-gradient) !important;
+    color: var(--bg-deep) !important;
+    box-shadow: 0 4px 15px var(--lab-accent-glow);
+}
+
+/* Category Colors */
+.bg-citrus { background-color: var(--citrus-yellow) !important; color: #000; }
+.bg-berry { background-color: var(--berry-punch) !important; }
+.bg-tropical { background-color: var(--fizz-orange) !important; }
+.bg-herbal { background-color: var(--herbal-green) !important; }
+.bg-spice { background-color: var(--spice-red) !important; }
+.bg-sweet { background-color: var(--sweet-lavender) !important; color: #000; }
+.bg-sour { background-color: var(--sour-lime) !important; color: #000; }
+.bg-artificial { background-color: var(--fizz-cyan) !important; color: #000; }
+.bg-coffee { background-color: var(--fizz-mocha) !important; }
+
+@media (max-width: 768px) {
+    .glass-surface { border-radius: 0; }
+}
+
+/* Animations */
+@keyframes bubble-fizz {
+    0% { transform: translateY(0); opacity: 0.7; }
+    50% { transform: translateY(-10px); opacity: 1; }
+    100% { transform: translateY(0); opacity: 0.7; }
+}
+
+.fizzing {
+    animation: bubble-fizz 3s infinite ease-in-out;
+}
+
+/* Form Accessibility & Contrast */
+::placeholder {
+    color: hsla(0, 0%, 100%, 0.65) !important;
+    font-weight: 300;
+}
+
+.form-control, .form-select {
+    background-color: hsla(0, 0%, 0%, 0.3) !important;
+    border: 1px solid hsla(0, 0%, 100%, 0.1) !important;
+    color: var(--text-primary) !important;
+    border-radius: 12px;
+}
+
+.form-control:focus, .form-select:focus {
+    background-color: hsla(0, 0%, 0%, 0.4) !important;
+    border-color: var(--lab-accent) !important;
+    box-shadow: 0 0 12px var(--lab-accent-glow) !important;
+}
+
+.text-dim-bright {
+    color: var(--text-muted);
+}
+
+.modal-content .list-group-item {
+    border-color: hsla(0, 0%, 100%, 0.05) !important;
+}
+
+.modal-content .text-dim {
+    color: var(--text-muted);
+}
+
+/* Global Visibility Mapping */
+.text-dim {
+    color: var(--text-dim) !important;
+}
+
+.text-muted {
+    color: var(--text-muted) !important;
+}
+
+.text-secondary {
+    color: var(--text-dim) !important;
+}
+
+.form-text {
+    color: var(--text-muted) !important;
+}
