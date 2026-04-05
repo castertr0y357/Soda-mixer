@@ -1,6 +1,6 @@
 """Recommendation engine for Soda Mixer."""
 
-import random
+from django.db.models import Avg
 from .models import Ingredient, Recipe, RecipeIngredient
 
 
@@ -15,6 +15,31 @@ CATEGORY_COMPATIBILITY = {
     'sour': ['sweet', 'herbal', 'citrus'],
     'artificial': ['citrus', 'berry', 'sweet', 'tropical'],
     'coffee': ['spice', 'sweet', 'herbal'],
+}
+
+# --- Flavor Bridges ---
+# Descriptors that bridge traditional category gaps
+FLAVOR_AFFINITY_GROUPS = {
+    'zesty': ['citrus', 'spice', 'herbal'],
+    'creamy': ['sweet', 'coffee', 'tropical'],
+    'earthy': ['herbal', 'coffee', 'spice'],
+    'floral': ['berry', 'herbal', 'citrus'],
+    'warm': ['spice', 'coffee', 'sweet'],
+    'tart': ['citrus', 'berry', 'sour'],
+}
+
+# Mapping of specific keywords to bridge groups
+KEYWORD_TO_GROUP = {
+    'ginger': 'zesty',
+    'vanilla': 'creamy',
+    'chocolate': 'warm',
+    'honey': 'creamy',
+    'mint': 'herbal',
+    'hibiscus': 'floral',
+    'lavender': 'floral',
+    'cinnamon': 'warm',
+    'lime': 'zesty',
+    'lemon': 'zesty',
 }
 
 # --- Name Generator ---
@@ -142,7 +167,7 @@ def suggest_categories(ingredient_ids):
 
 
 # pairing suggestions with intensity rules
-def get_recommendation(ingredient_ids, drink_type='SODA'):
+def get_recommendation(ingredient_ids, drink_type='SODA', experimental=False):
     """
     Get ingredient recommendations based on selected ingredients.
     """
@@ -155,23 +180,33 @@ def get_recommendation(ingredient_ids, drink_type='SODA'):
     
     selected_ingredients = Ingredient.objects.filter(id__in=ingredient_ids)
     if not selected_ingredients.exists():
-        return get_recommendation([], drink_type)
+        return get_recommendation([], drink_type, experimental)
     
     recommendations = []
     
-    # Get recommended ingredients based on compatibility
+    # Get recommended ingredients
     for ingredient in selected_ingredients:
-        compatible_categories = CATEGORY_COMPATIBILITY.get(ingredient.category, [])
-        matching_ingredients = Ingredient.objects.filter(
-            category__in=compatible_categories
-        ).exclude(id__in=ingredient_ids)
+        if experimental:
+            # Experimental mode: Look at shared groups/notes regardless of category
+            matching_ingredients = Ingredient.objects.filter(is_in_inventory=True).annotate(
+                avg_rating=Avg('ingredient_usage__recipe__rating')
+            ).exclude(id__in=ingredient_ids)
+        else:
+            # Standard mode: Respect category compatibility
+            compatible_categories = CATEGORY_COMPATIBILITY.get(ingredient.category, [])
+            matching_ingredients = Ingredient.objects.filter(
+                category__in=compatible_categories,
+                is_in_inventory=True
+            ).annotate(
+                avg_rating=Avg('ingredient_usage__recipe__rating')
+            ).exclude(id__in=ingredient_ids)
         
-        # Filter by inventory
-        matching_ingredients = matching_ingredients.filter(is_in_inventory=True)
-        
-        # Score by intensity balance
+        # Score matching ingredients
         for i in matching_ingredients:
-            score = _calculate_compatibility_score(ingredient, i)
+            score_data = _calculate_compatibility_score(ingredient, i, experimental=experimental, avg_rating=i.avg_rating)
+            score = score_data['score']
+            reason = score_data['reason']
+            
             # Espresso Synergy bonus
             if drink_type == 'COFFEE' and i.ingredient_type == 'COFFEE_BEAN':
                 score += 5
@@ -179,7 +214,7 @@ def get_recommendation(ingredient_ids, drink_type='SODA'):
             recommendations.append({
                 'ingredient': i,
                 'score': score,
-                'reason': f"Pairs with {ingredient.name}"
+                'reason': reason
             })
     
     # Sort and filter unique
@@ -201,7 +236,7 @@ def get_recommendation(ingredient_ids, drink_type='SODA'):
         'suggestions': list(selected_ingredients)
     }
 
-def get_tiered_recommendation(base_id, secondary_id=None, drink_type='SODA'):
+def get_tiered_recommendation(base_id, secondary_id=None, drink_type='SODA', experimental=False):
     """
     Get tiered recommendations (Secondary or Tertiary) based on selected base and optional secondary.
     """
@@ -213,21 +248,31 @@ def get_tiered_recommendation(base_id, secondary_id=None, drink_type='SODA'):
     
     if not secondary_id:
         # Looking for Secondary
-        compat_cats = CATEGORY_COMPATIBILITY.get(base_ingredient.category, [])
-        candidates = Ingredient.objects.filter(
-            category__in=compat_cats, 
-            is_in_inventory=True
-        ).exclude(id=base_id)
+        if experimental:
+            candidates = Ingredient.objects.filter(is_in_inventory=True).annotate(
+                avg_rating=Avg('ingredient_usage__recipe__rating')
+            ).exclude(id=base_id)
+        else:
+            compat_cats = CATEGORY_COMPATIBILITY.get(base_ingredient.category, [])
+            candidates = Ingredient.objects.filter(
+                category__in=compat_cats, 
+                is_in_inventory=True
+            ).annotate(
+                avg_rating=Avg('ingredient_usage__recipe__rating')
+            ).exclude(id=base_id)
         
         for cand in candidates:
-            score = _calculate_compatibility_score(base_ingredient, cand)
+            score_data = _calculate_compatibility_score(base_ingredient, cand, experimental=experimental, avg_rating=cand.avg_rating)
+            score = score_data['score']
+            reason = score_data['reason']
+            
             if drink_type == 'COFFEE' and cand.ingredient_type == 'COFFEE_BEAN':
                 score += 5
             recommendations.append({
                 'ingredient': cand,
                 'score': score,
                 'tier': 'secondary',
-                'reason': f"Pairs nicely with {base_ingredient.name}"
+                'reason': reason
             })
     else:
         # Looking for Tertiary
@@ -235,41 +280,111 @@ def get_tiered_recommendation(base_id, secondary_id=None, drink_type='SODA'):
         if not sec_ingredient:
             return {'recommended': []}
             
-        base_compat = set(CATEGORY_COMPATIBILITY.get(base_ingredient.category, []))
-        sec_compat = set(CATEGORY_COMPATIBILITY.get(sec_ingredient.category, []))
-        shared_compat = base_compat.intersection(sec_compat)
-        
-        candidates = Ingredient.objects.filter(
-            category__in=shared_compat,
-            is_in_inventory=True
-        ).exclude(id__in=[base_id, secondary_id])
+        if experimental:
+            candidates = Ingredient.objects.filter(is_in_inventory=True).annotate(
+                avg_rating=Avg('ingredient_usage__recipe__rating')
+            ).exclude(id__in=[base_id, secondary_id])
+        else:
+            base_compat = set(CATEGORY_COMPATIBILITY.get(base_ingredient.category, []))
+            sec_compat = set(CATEGORY_COMPATIBILITY.get(sec_ingredient.category, []))
+            shared_compat = base_compat.intersection(sec_compat)
+            
+            candidates = Ingredient.objects.filter(
+                category__in=shared_compat,
+                is_in_inventory=True
+            ).annotate(
+                avg_rating=Avg('ingredient_usage__recipe__rating')
+            ).exclude(id__in=[base_id, secondary_id])
         
         for cand in candidates:
-            score1 = _calculate_compatibility_score(base_ingredient, cand)
-            score2 = _calculate_compatibility_score(sec_ingredient, cand)
+            res1 = _calculate_compatibility_score(base_ingredient, cand, experimental=experimental, avg_rating=cand.avg_rating)
+            res2 = _calculate_compatibility_score(sec_ingredient, cand, experimental=experimental, avg_rating=cand.avg_rating)
             profile_score = _calculate_profile_balance(base_ingredient, sec_ingredient, cand)
+            
+            score = res1['score'] + res2['score'] + profile_score
+            reason = res1['reason'] if res1['score'] >= res2['score'] else res2['reason']
+            if experimental and (res1.get('bridge') or res2.get('bridge')):
+                reason = f"Bridges {base_ingredient.name} and {sec_ingredient.name} via {res1.get('bridge') or res2.get('bridge')}"
             
             recommendations.append({
                 'ingredient': cand,
-                'score': score1 + score2 + profile_score,
+                'score': score,
                 'tier': 'tertiary',
-                'reason': f"Bridges {base_ingredient.name} and {sec_ingredient.name}"
+                'reason': reason
             })
             
     recommendations.sort(key=lambda x: x['score'], reverse=True)
     return {'recommended': recommendations[:5]}
 
 
-def _calculate_compatibility_score(i1, i2):
-    """Calculate compatibility score between two ingredients."""
+def _calculate_compatibility_score(i1, i2, experimental=False, avg_rating=0):
+    """
+    Calculate compatibility score between two ingredients.
+    Returns a dict with 'score', 'reason', and optional 'bridge'.
+    """
     score = 0
+    reason = f"Shares {i1.category} notes" if i1.category == i2.category else f"Pairs with {i1.name}"
+    bridge = None
+    
+    avg_rating = avg_rating or 0
+
+    # Category compatibility
     if i1.category == i2.category:
         score -= 1
-    intensity_diff = abs(i1.intensity - i2.intensity)
-    score += intensity_diff * 2
     if i2.category in CATEGORY_COMPATIBILITY.get(i1.category, []):
         score += 3
-    return score
+        reason = f"Classic {i1.category} + {i2.category} pairing"
+
+    # Intensity balance
+    intensity_diff = abs(i1.intensity - i2.intensity)
+    score += (5 - intensity_diff) # Reward similar intensity for harmony
+
+    # Keyword Affinity (The Bridge)
+    notes1 = set(n.strip().lower() for n in i1.flavor_notes.split(',') if n.strip())
+    notes2 = set(n.strip().lower() for n in i2.flavor_notes.split(',') if n.strip())
+    shared_notes = notes1.intersection(notes2)
+    
+    if shared_notes:
+        score += len(shared_notes) * 2
+        note = list(shared_notes)[0]
+        bridge = note
+        reason = f"Synergy via shared {note} notes"
+    else:
+        # Check bridge groups
+        group1 = None
+        for k, g in KEYWORD_TO_GROUP.items():
+            if k in notes1 or k in i1.name.lower():
+                group1 = g
+                break
+        
+        group2 = None
+        for k, g in KEYWORD_TO_GROUP.items():
+            if k in notes2 or k in i2.name.lower():
+                group2 = g
+                break
+        
+        if group1 and group2 and group1 == group2:
+            score += 3
+            bridge = group1
+            reason = f"Thematic bridge: {group1.title()}"
+
+    # Taste-First: Rating Bonus
+    if avg_rating >= 4:
+        score += 4
+    elif avg_rating >= 3:
+        score += 2
+
+    # Experimental adjustments
+    if experimental:
+        if i2.category not in CATEGORY_COMPATIBILITY.get(i1.category, []):
+            # Reward contrast/discovery in experimental mode
+            if shared_notes or (group1 and group2 and group1 == group2):
+                score += 5
+                reason = f"Experimental bridge: {bridge or 'Contrast'}"
+            else:
+                score += 1 # Base experimental score for novel pairings
+
+    return {'score': score, 'reason': reason, 'bridge': bridge}
 
 
 def _calculate_profile_balance(i1, i2, cand):

@@ -535,9 +535,10 @@ def get_recommendations_api(request):
     try:
         data = json.loads(request.body)
         ingredient_ids = data.get('ingredient_ids', [])
+        experimental = data.get('mode') == 'experimental' or data.get('experimental', False)
 
         if len(ingredient_ids) == 0:
-            result = get_recommendation([])
+            result = get_recommendation([], experimental=experimental)
             serialized_recs = [
                 {
                     'id': r['ingredient'].id,
@@ -550,7 +551,7 @@ def get_recommendations_api(request):
                 } for r in result.get('recommended', [])
             ]
         elif len(ingredient_ids) == 1:
-            result = get_tiered_recommendation(ingredient_ids[0])
+            result = get_tiered_recommendation(ingredient_ids[0], experimental=experimental)
             serialized_recs = [
                 {
                     'id': r['ingredient'].id,
@@ -563,7 +564,7 @@ def get_recommendations_api(request):
                 } for r in result.get('recommended', [])
             ]
         else:
-            result = get_tiered_recommendation(ingredient_ids[0], ingredient_ids[1])
+            result = get_tiered_recommendation(ingredient_ids[0], ingredient_ids[1], experimental=experimental)
             serialized_recs = [
                 {
                     'id': r['ingredient'].id,

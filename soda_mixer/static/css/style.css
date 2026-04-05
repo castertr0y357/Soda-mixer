@@ -332,3 +332,37 @@ h1, h2, h3, h4, h5, h6 {
 .form-text {
     color: var(--text-muted) !important;
 }
+
+/* Experimental & Bridge Styling */
+.active-lab-mode {
+    background: var(--lab-gradient) !important;
+    color: var(--bg-deep) !important;
+    box-shadow: 0 4px 15px var(--lab-accent-glow);
+    font-weight: 700;
+}
+
+.text-experimental {
+    color: #ff00ff !important; /* Neon Magenta */
+    text-shadow: 0 0 10px rgba(255, 0, 255, 0.4);
+}
+
+.border-experimental {
+    border: 2px solid rgba(255, 0, 255, 0.5) !important;
+}
+
+.glow-experimental {
+    box-shadow: 0 0 20px rgba(255, 0, 255, 0.2);
+}
+
+.glow-experimental:hover {
+    box-shadow: 0 0 30px rgba(255, 0, 255, 0.4);
+    border-color: rgba(255, 0, 255, 0.8) !important;
+}
+
+.glow-text {
+    text-shadow: 0 0 8px currentColor;
+}
+
+.hover-lime:hover {
+    color: var(--fizz-lime) !important;
+}

@@ -9,17 +9,29 @@
         <h1 class="display-3 fw-bold text-white mb-2">BEVERAGE <span class="text-gradient-lab">LABORATORY</span></h1>
         <p class="text-muted fs-5">Advanced synthesis for the modern household scientist.</p>
         
-        <div class="d-flex justify-content-center gap-2 mt-4">
-            <button type="button" id="modeSoda" class="btn btn-lg btn-glass-toggle px-4 active" onclick="setLabMode('SODA')">
-                <i class="bi bi-water"></i> Soda Lab
-            </button>
-            <button type="button" id="modeCoffee" class="btn btn-lg btn-glass-toggle px-4" onclick="setLabMode('COFFEE')">
-                <i class="bi bi-cup-hot"></i> Coffee Lab
-            </button>
-            <button type="button" id="modeSlushie" class="btn btn-lg btn-glass-toggle px-4" onclick="setLabMode('SLUSHIE')">
-                <i class="bi bi-snow"></i> Cryo Lab
-            </button>
-        </div>
+            <div class="d-flex justify-content-center gap-2 mt-4">
+                <button type="button" id="modeSoda" class="btn btn-lg btn-glass-toggle px-4 active" onclick="setLabMode('SODA')">
+                    <i class="bi bi-water"></i> Soda Lab
+                </button>
+                <button type="button" id="modeCoffee" class="btn btn-lg btn-glass-toggle px-4" onclick="setLabMode('COFFEE')">
+                    <i class="bi bi-cup-hot"></i> Coffee Lab
+                </button>
+                <button type="button" id="modeSlushie" class="btn btn-lg btn-glass-toggle px-4" onclick="setLabMode('SLUSHIE')">
+                    <i class="bi bi-snow"></i> Cryo Lab
+                </button>
+            </div>
+
+            <!-- Laboratory Sensitivity Toggle -->
+            <div class="d-flex justify-content-center mt-3">
+                <div class="glass-surface p-1 rounded-pill d-flex gap-1" style="max-width: 300px; border: 1px solid rgba(255,255,255,0.05);">
+                    <button type="button" id="toggleStandard" class="btn btn-sm rounded-pill px-3 active-lab-mode" onclick="setRecommendationMode('standard')">
+                        <i class="bi bi-shield-check me-1"></i> Standard
+                    </button>
+                    <button type="button" id="toggleExperimental" class="btn btn-sm rounded-pill px-3 text-dim" onclick="setRecommendationMode('experimental')">
+                        <i class="bi bi-flask me-1"></i> Experimental
+                    </button>
+                </div>
+            </div>
     </div>
 </div>
 
@@ -167,6 +179,7 @@
 
 <script>
     let currentLabMode = 'SODA';
+    let recommendationMode = 'standard';
     let selectedIngredients = []; 
     let allIngredientsHtml = ''; 
     let originalRecipesHtml = '';
@@ -181,8 +194,36 @@
         
         // Initialize from localStorage
         const savedMode = localStorage.getItem('lab_mode') || 'SODA';
+        const savedRecMode = localStorage.getItem('recommendation_mode') || 'standard';
         setLabMode(savedMode, true); 
+        setRecommendationMode(savedRecMode);
     });
+
+    function setRecommendationMode(mode) {
+        recommendationMode = mode;
+        localStorage.setItem('recommendation_mode', mode);
+        
+        const stdBtn = document.getElementById('toggleStandard');
+        const expBtn = document.getElementById('toggleExperimental');
+        
+        if (mode === 'experimental') {
+            stdBtn.classList.remove('active-lab-mode');
+            stdBtn.classList.add('text-dim');
+            expBtn.classList.add('active-lab-mode');
+            expBtn.classList.remove('text-dim');
+            document.getElementById('mixerSubtitle').innerHTML = 'Synthesizing <span class="text-experimental glow-text">experimental</span> molecular outcomes.';
+        } else {
+            expBtn.classList.remove('active-lab-mode');
+            expBtn.classList.add('text-dim');
+            stdBtn.classList.add('active-lab-mode');
+            stdBtn.classList.remove('text-dim');
+            document.getElementById('mixerSubtitle').textContent = 'Assemble your molecular components.';
+        }
+        
+        if (selectedIngredients.length > 0) {
+            fetchRecommendations();
+        }
+    }
 
     function setLabMode(mode, isInit = false) {
         currentLabMode = mode;
@@ -299,7 +340,8 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 ingredient_ids: ingredientIds,
-                drink_type: currentLabMode
+                drink_type: currentLabMode,
+                mode: recommendationMode
             })
         })
         .then(response => response.json())
@@ -314,13 +356,20 @@
             
             data.recommended.forEach(rec => {
                 const badgeClass = getBadgeColor(rec.category);
+                const isExperimental = recommendationMode === 'experimental';
+                const cardClass = isExperimental ? 'border-experimental glow-experimental' : 'border-success border-opacity-25';
+                
                 container.innerHTML += `
                     <div class="col-md-4 col-sm-6">
-                        <div class="glass-card p-3 h-100 d-flex flex-column align-items-center justify-content-center text-center cursor-pointer border-success border-opacity-25"
+                        <div class="glass-card p-3 h-100 d-flex flex-column align-items-center justify-content-center text-center cursor-pointer ${cardClass}"
                                  onclick="selectIngredient(${rec.id}, '${rec.name.replace(/'/g, "\\'")}', ${rec.intensity}, '${rec.category}')">
                                 <span class="fw-bold fs-5 mb-1">${rec.name}</span>
                                 <span class="badge-fizz ${badgeClass} mb-2">${rec.category}</span>
-                                <small class="text-gradient-lab fw-bold" style="font-size: 0.7rem;">${rec.reason}</small>
+                                <div class="mt-auto">
+                                    <small class="${isExperimental ? 'text-experimental' : 'text-gradient-lab'} fw-bold" style="font-size: 0.7rem;">
+                                        ${isExperimental ? '<i class="bi bi-lightning-charge-fill me-1"></i>' : ''}${rec.reason}
+                                    </small>
+                                </div>
                         </div>
                     </div>
                 `;
