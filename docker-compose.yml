@@ -20,7 +20,7 @@ services:
   web:
     build: .
     volumes:
-      - .:/app
+      - .:/app:delegated
     ports:
       - "8000:8000"
     environment:

@@ -115,6 +115,7 @@
                         data-type="{{ ingredient.ingredient_type }}" data-category="{{ ingredient.category }}"
                         data-intensity="{{ ingredient.intensity }}" data-sweetness="{{ ingredient.sweetness }}"
                         data-acidity="{{ ingredient.acidity }}" data-bitterness="{{ ingredient.bitterness }}"
+                        data-systems="{{ ingredient.compatible_systems }}"
                         data-description="{{ ingredient.description|default:'' }}">
                         <i class="bi bi-pencil"></i>
                     </button>
@@ -162,7 +163,12 @@
             <div class="modal-body text-body">
                 <div class="mb-3">
                     <label class="form-label text-white fw-bold small">Compound Name</label>
-                    <input type="text" name="name" class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10" required>
+                    <div class="input-group">
+                        <input type="text" name="name" id="addName" class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10" required>
+                        <button class="btn btn-outline-experimental" type="button" onclick="synthesizeProfile('add')">
+                            <i class="bi bi-magic"></i> <span class="d-none d-sm-inline">Synthesize</span>
+                        </button>
+                    </div>
                 </div>
                 <div class="row g-2 mb-3">
                     <div class="col-6">
@@ -188,28 +194,45 @@
                 <div class="row g-2 mb-3">
                     <div class="col-3">
                         <label class="form-label text-white fw-bold small" title="1-5">Intensity</label>
-                        <input type="number" name="intensity" value="3" min="1" max="5"
+                        <input type="number" name="intensity" id="addInt" value="3" min="1" max="5"
                             class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10 text-center">
                     </div>
                     <div class="col-3">
                         <label class="form-label text-white fw-bold small" title="1-5">Sweetness</label>
-                        <input type="number" name="sweetness" value="3" min="1" max="5"
+                        <input type="number" name="sweetness" id="addSwt" value="3" min="1" max="5"
                             class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10 text-center">
                     </div>
                     <div class="col-3">
                         <label class="form-label text-white fw-bold small" title="1-5">Acidity</label>
-                        <input type="number" name="acidity" value="3" min="1" max="5"
+                        <input type="number" name="acidity" id="addAcd" value="3" min="1" max="5"
                             class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10 text-center">
                     </div>
                     <div class="col-3">
                         <label class="form-label text-white fw-bold small" title="1-5">Bitterness</label>
-                        <input type="number" name="bitterness" value="1" min="1" max="5"
+                        <input type="number" name="bitterness" id="addBit" value="1" min="1" max="5"
                             class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10 text-center">
                     </div>
                 </div>
                 <div class="mb-3">
+                    <label class="form-label text-white fw-bold small">System Compatibility</label>
+                    <div class="d-flex gap-3 px-2 py-2 bg-dark bg-opacity-25 rounded border border-white border-opacity-10">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="compatible_systems" value="SODA" id="addSysSoda" checked>
+                            <label class="form-check-label text-white small" for="addSysSoda">Soda</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="compatible_systems" value="COFFEE" id="addSysCoffee" checked>
+                            <label class="form-check-label text-white small" for="addSysCoffee">Coffee</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="compatible_systems" value="SLUSHIE" id="addSysSlushie" checked>
+                            <label class="form-check-label text-white small" for="addSysSlushie">Slushie</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-3">
                     <label class="form-label text-white fw-bold small">Description (Optional)</label>
-                    <textarea name="description" rows="2"
+                    <textarea name="description" id="addDesc" rows="2"
                         class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10"></textarea>
                 </div>
             </div>
@@ -233,7 +256,12 @@
             <div class="modal-body text-body">
                 <div class="mb-3">
                     <label class="form-label text-white fw-bold small">Compound Name</label>
-                    <input type="text" name="name" id="editName" class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10" required>
+                    <div class="input-group">
+                        <input type="text" name="name" id="editName" class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10" required>
+                        <button class="btn btn-outline-experimental" type="button" onclick="synthesizeProfile('edit')">
+                            <i class="bi bi-magic"></i> <span class="d-none d-sm-inline">Update Profile</span>
+                        </button>
+                    </div>
                 </div>
                 <div class="row g-2 mb-3">
                     <div class="col-6">
@@ -279,6 +307,23 @@
                         <label class="form-label text-white fw-bold small">Bitterness</label>
                         <input type="number" name="bitterness" id="editBit" min="1" max="5"
                             class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10 text-center">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label text-white fw-bold small">System Compatibility</label>
+                    <div class="d-flex gap-3 px-2 py-2 bg-dark bg-opacity-25 rounded border border-white border-opacity-10">
+                        <div class="form-check">
+                            <input class="form-check-input sys-edit-check" type="checkbox" name="compatible_systems" value="SODA" id="editSysSoda">
+                            <label class="form-check-label text-white small" for="editSysSoda">Soda</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input sys-edit-check" type="checkbox" name="compatible_systems" value="COFFEE" id="editSysCoffee">
+                            <label class="form-check-label text-white small" for="editSysCoffee">Coffee</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input sys-edit-check" type="checkbox" name="compatible_systems" value="SLUSHIE" id="editSysSlushie">
+                            <label class="form-check-label text-white small" for="editSysSlushie">Slushie</label>
+                        </div>
                     </div>
                 </div>
                 <div class="mb-3">
@@ -380,6 +425,12 @@
                 document.getElementById('editAcd').value = d.acidity;
                 document.getElementById('editBit').value = d.bitterness;
                 document.getElementById('editDesc').value = d.description;
+                
+                // Set system checkboxes
+                const systems = d.systems ? d.systems.split(',') : [];
+                document.querySelectorAll('.sys-edit-check').forEach(chk => {
+                    chk.checked = systems.includes(chk.value);
+                });
 
                 new bootstrap.Modal(document.getElementById('editIngredientModal')).show();
             });
@@ -471,5 +522,66 @@
             });
         });
     });
+
+    async function synthesizeProfile(prefix) {
+        const nameInput = document.getElementById(prefix + 'Name');
+        const descInput = document.getElementById(prefix + 'Desc') || { value: '' };
+        const name = nameInput.value.trim();
+        const description = descInput.value.trim();
+
+        if (!name) {
+            alert("Identification Required: Please enter a material name for chemical analysis.");
+            return;
+        }
+
+        const btn = event.currentTarget;
+        const originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Analyzing...';
+
+        try {
+            const response = await fetch('/api/ai/analyze-ingredient/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ name, description })
+            });
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                const profile = data.profile;
+                const fields = {
+                    'Int': profile.intensity,
+                    'Swt': profile.sweetness,
+                    'Acd': profile.acidity,
+                    'Bit': profile.bitterness
+                };
+
+                for (const [suffix, value] of Object.entries(fields)) {
+                    const el = document.getElementById(prefix + suffix);
+                    if (el) {
+                        el.value = Math.round(value);
+                        el.classList.add('is-valid');
+                        setTimeout(() => el.classList.remove('is-valid'), 2000);
+                    }
+                }
+                btn.innerHTML = '<i class="bi bi-check-lg"></i> Synced';
+                btn.classList.replace('btn-outline-experimental', 'btn-success');
+            } else {
+                alert("Analysis Error: " + data.error);
+            }
+        } catch (err) {
+            alert("Comms Failure: Could not reach assistant substrate.");
+        } finally {
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+                btn.classList.remove('btn-success');
+                btn.classList.add('btn-outline-experimental');
+            }, 2000);
+        }
+    }
 </script>
 {% endblock %}

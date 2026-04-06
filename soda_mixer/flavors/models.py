@@ -99,6 +99,14 @@ class Ingredient(models.Model):
         blank=True,
         help_text="Comma-separated flavor descriptors (e.g., 'berry, chocolatey, floral')"
     )
+    
+    # System accessibility tags
+    compatible_systems = models.CharField(
+        max_length=100, 
+        default="SODA,COFFEE,SLUSHIE",
+        help_text="Comma-separated list of compatible lab systems (SODA, COFFEE, SLUSHIE)"
+    )
+    
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -218,6 +226,28 @@ class MixHistoryIngredient(models.Model):
         return f"{self.mix} — {self.ingredient.name}"
 
 
+class LLMProvider(models.Model):
+    """Configuration for an LLM provider (Cloud or Local)."""
+    PROVIDER_CHOICES = [
+        ('OPENAI', 'ChatGPT (OpenAI)'),
+        ('CLAUDE', 'Claude (Anthropic)'),
+        ('GEMINI', 'Gemini (Google)'),
+        ('OLLAMA', 'Ollama (Local)'),
+        ('OPENWEBUI', 'OpenWebUI'),
+        ('ANYTHINGLLM', 'AnythingLLM'),
+        ('CUSTOM', 'Custom OpenAI-Compatible'),
+    ]
+    name = models.CharField(max_length=100)
+    provider_type = models.CharField(max_length=20, choices=PROVIDER_CHOICES)
+    api_key = models.CharField(max_length=255, blank=True, null=True)
+    base_url = models.URLField(blank=True, null=True, help_text="e.g., http://localhost:11434")
+    default_model = models.CharField(max_length=100, blank=True, null=True, help_text="e.g., gpt-4o or mistral")
+    is_enabled = models.BooleanField(default=False)
+    
+    def __str__(self):
+        return f"{self.name} ({self.get_provider_type_display()})"
+
+
 class SystemConfiguration(models.Model):
     """Singleton model for laboratory-wide settings and API credentials."""
     mealie_url = models.URLField(
@@ -228,6 +258,13 @@ class SystemConfiguration(models.Model):
         max_length=255, 
         blank=True, 
         help_text="Long-lived API token generated in Mealie User Settings"
+    )
+    default_llm_provider = models.ForeignKey(
+        LLMProvider,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='default_for_config'
     )
     
     def save(self, *args, **kwargs):

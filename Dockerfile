@@ -32,5 +32,5 @@ EXPOSE 8000
 # Run the entrypoint script
 ENTRYPOINT ["/app/entrypoint.sh"]
 
-# Start Gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "soda_mixer.wsgi:application"]
+# Start Gunicorn with async gevent workers to handle long-running LLM calls without blocking
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--timeout", "120", "--workers", "3", "--worker-class", "gevent", "soda_mixer.wsgi:application"]

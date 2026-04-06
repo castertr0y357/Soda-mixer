@@ -156,6 +156,94 @@ h1, h2, h3, h4, h5, h6 {
     box-shadow: 0 0 10px var(--lab-accent);
 }
 
+/* =============================================
+   🧪 Experimental / Accent Utility Classes
+   ============================================= */
+:root {
+    --experimental: hsl(285, 90%, 65%);
+    --experimental-glow: hsla(285, 90%, 65%, 0.4);
+    --experimental-dark: hsl(285, 70%, 20%);
+}
+
+.text-experimental { color: var(--experimental) !important; }
+.text-accent        { color: var(--lab-accent) !important; }
+.border-experimental { border-color: var(--experimental) !important; }
+
+.glow-experimental {
+    box-shadow: 0 0 20px var(--experimental-glow);
+}
+
+.btn-outline-experimental {
+    color: var(--experimental);
+    border: 1px solid var(--experimental);
+    background: transparent;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: all 0.25s ease;
+}
+.btn-outline-experimental:hover,
+.btn-outline-experimental:focus {
+    background: var(--experimental);
+    color: white;
+    box-shadow: 0 0 14px var(--experimental-glow);
+}
+
+/* Solid accent button — used for primary lab actions */
+.btn-accent {
+    background: var(--lab-gradient);
+    color: var(--bg-deep);
+    border: none;
+    border-radius: 8px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    transition: all 0.25s ease;
+    box-shadow: 0 4px 14px var(--lab-accent-glow);
+}
+.btn-accent:hover,
+.btn-accent:focus {
+    filter: brightness(1.1);
+    box-shadow: 0 6px 20px var(--lab-accent-glow);
+    color: var(--bg-deep);
+}
+
+/* btn-outline-accent: visible accent outline variant */
+.btn-outline-accent {
+    color: var(--lab-accent);
+    border: 1px solid var(--lab-accent);
+    background: transparent;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: all 0.25s ease;
+}
+.btn-outline-accent:hover,
+.btn-outline-accent:focus {
+    background: var(--lab-accent);
+    color: var(--bg-deep);
+    box-shadow: 0 0 14px var(--lab-accent-glow);
+}
+
+/* AI quick-action buttons active state */
+.btn-quick-ai {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    border-radius: 8px;
+    padding: 0.3rem 0.6rem;
+    transition: all 0.25s ease;
+}
+.btn-quick-ai.active-safe {
+    background: var(--fizz-cyan);
+    color: var(--bg-deep);
+    border-color: transparent;
+    box-shadow: 0 0 12px hsla(180, 95%, 55%, 0.4);
+}
+.btn-quick-ai.active-experimental {
+    background: var(--experimental);
+    color: white;
+    border-color: transparent;
+    box-shadow: 0 0 12px var(--experimental-glow);
+}
+
 /* Hall of Fame Readouts */
 .readout-card {
     background: hsla(0, 0%, 0%, 0.2);
@@ -365,4 +453,195 @@ h1, h2, h3, h4, h5, h6 {
 
 .hover-lime:hover {
     color: var(--fizz-lime) !important;
+}
+
+/* AI Assistant Components */
+#ai-assistant-bubble {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    z-index: 1000;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.ai-bubble-btn {
+    width: 65px;
+    height: 65px;
+    border-radius: 50%;
+    background: var(--lab-gradient);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--bg-deep);
+    font-size: 1.8rem;
+    box-shadow: 0 10px 30px var(--lab-accent-glow), 0 0 0 6px rgba(255, 255, 255, 0.05);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.ai-bubble-btn:hover {
+    transform: scale(1.1) rotate(5deg);
+    box-shadow: 0 15px 40px var(--lab-accent-glow), 0 0 0 8px rgba(255, 255, 255, 0.1);
+}
+
+.pulse-ring {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    border-radius: 50%;
+    border: 2px solid var(--lab-accent);
+    animation: ai-pulse 2s infinite;
+}
+
+@keyframes ai-pulse {
+    0% { transform: scale(1); opacity: 0.8; }
+    100% { transform: scale(1.6); opacity: 0; }
+}
+
+#ai-chat-panel {
+    position: fixed;
+    bottom: 110px;
+    right: 30px;
+    width: 380px;
+    height: 550px;
+    z-index: 1001;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transform: translateY(20px);
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+#ai-chat-panel.active {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.ai-chat-header {
+    background: var(--lab-gradient);
+    padding: 1rem 1.5rem;
+    color: var(--bg-deep);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.ai-chat-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    background: hsla(225, 30%, 5%, 0.4);
+}
+
+/* Chat Bubbles */
+.chat-msg {
+    max-width: 85%;
+    padding: 0.8rem 1rem;
+    border-radius: 18px;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.msg-assistant {
+    align-self: flex-start;
+    background: var(--glass-surface);
+    color: var(--text-primary);
+    border-bottom-left-radius: 4px;
+    border: 1px solid var(--glass-border);
+}
+
+.msg-user {
+    align-self: flex-end;
+    background: var(--lab-accent);
+    color: var(--bg-deep);
+    font-weight: 600;
+    border-bottom-right-radius: 4px;
+    box-shadow: 0 4px 12px var(--lab-accent-glow);
+}
+
+.ai-chat-footer {
+    padding: 1rem;
+    border-top: 1px solid var(--glass-border);
+    background: var(--glass-highlight);
+}
+
+.ai-input-group {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.ai-input {
+    flex: 1;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.3) !important;
+    border: 1px solid var(--glass-border) !important;
+    color: white !important;
+    padding: 0.6rem 1rem;
+}
+
+.warming-indicator {
+    position: absolute;
+    top: 60px;
+    left: 0;
+    right: 0;
+    background: rgba(0, 255, 255, 0.1);
+    color: var(--fizz-cyan);
+    font-size: 0.65rem;
+    text-align: center;
+    padding: 2px 0;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    border-bottom: 1px solid rgba(0, 255, 255, 0.2);
+    backdrop-filter: blur(4px);
+}
+
+@media (max-width: 500px) {
+    #ai-chat-panel {
+        width: calc(100% - 40px);
+        right: 20px;
+    }
+}
+
+/* 🧪 LOGIN MODAL & AUTH UI */
+.glass-modal .modal-content {
+    background: rgba(10, 15, 25, 0.85);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(0, 255, 255, 0.2);
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.5), 0 0 15px rgba(0, 255, 255, 0.1);
+}
+
+.border-lab-cyan {
+    border: 1px solid var(--fizz-cyan) !important;
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.2);
+}
+
+.text-gradient-lab {
+    background: linear-gradient(135deg, var(--fizz-cyan) 0%, #00d2ff 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.uppercase { text-transform: uppercase; }
+.tracking-wider { letter-spacing: 0.1em; }
+.extra-small { font-size: 0.65rem; }
+
+.modal-backdrop.show {
+    backdrop-filter: blur(8px);
+    background-color: rgba(0, 0, 0, 0.7);
+}
+
+#lab-login-form .form-control:focus {
+    background: rgba(0, 0, 0, 0.8);
+    border-color: var(--fizz-cyan);
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.2);
+    color: white;
 }

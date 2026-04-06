@@ -40,6 +40,21 @@ urlpatterns = [
     path('api/ingredient-profiles/delete/', views.delete_ingredient_profile_api, name='delete_ingredient_profile_api'),
     path('api/recipes/<int:pk>/export/', views.export_recipe_to_mealie_api, name='export_recipe_to_mealie_api'),
 
+    # AI Assistant endpoints
+    path('api/ai/chat/', views.ai_chat_api, name='ai_chat_api'),
+    path('api/ai/pulse/', views.ai_keep_warm_api, name='ai_keep_warm_api'),
+    path('api/ai/provider/save/', views.save_llm_provider_api, name='save_llm_provider_api'),
+    path('api/ai/provider/<int:pk>/delete/', views.delete_llm_provider_api, name='delete_llm_provider_api'),
+    path('api/ai/provider/<int:pk>/models/', views.fetch_provider_models_api, name='fetch_provider_models_api'),
+    path('api/ai/provider/discover/', views.discover_provider_models_api, name='discover_provider_models_api'),
+    path('api/ai/suggest/', views.ai_suggest_api, name='ai_suggest_api'),
+    path('api/ai/synthesize/', views.ai_synthesize_api, name='ai_synthesize_api'),
+    path('api/ai/analyze-ingredient/', views.ai_analyze_ingredient_api, name='ai_analyze_ingredient_api'),
+    
+    # Auth
+    path('api/auth/login/', views.login_api, name='login_api'),
+    path('api/auth/logout/', views.logout_api, name='logout_api'),
+
     # Settings and Data management
     path('settings/', views.settings_view, name='settings'),
     path('settings/save/', views.save_settings_api, name='save_settings_api'),

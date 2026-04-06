@@ -26,6 +26,9 @@
             <button class="nav-link text-start py-3 fw-bold" id="v-pills-integrations-tab" data-bs-toggle="pill" data-bs-target="#v-pills-integrations" type="button" role="tab" aria-selected="false">
                 <i class="bi bi-plug me-2"></i> Integrations
             </button>
+            <button class="nav-link text-start py-3 fw-bold" id="v-pills-ai-tab" data-bs-toggle="pill" data-bs-target="#v-pills-ai" type="button" role="tab" aria-selected="false">
+                <i class="bi bi-robot me-2"></i> AI Assistant
+            </button>
         </div>
     </div>
 
@@ -103,6 +106,67 @@
                     </form>
                 </div>
             </div>
+
+            <!-- AI Assistant Pane -->
+            <div class="tab-pane fade" id="v-pills-ai" role="tabpanel">
+                <div class="glass-surface p-4 border-white border-opacity-10">
+                    <div class="d-flex align-items-center justify-content-between mb-4">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-robot text-gradient-lab fs-4"></i>
+                            <h4 class="mb-0 text-white">AI Laboratory Assistants</h4>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="openProviderModal()">
+                            <i class="bi bi-plus-lg"></i> Add Provider
+                        </button>
+                    </div>
+
+                    <p class="text-dim small mb-4">Configure multiple LLM substrates to assist in creative mixology. Local models (Ollama) include a heartbeat pulse to maintain VRAM latency.</p>
+
+                    <div class="row g-3" id="providerList">
+                        {% for provider in providers %}
+                        <div class="col-12">
+                            <div class="glass-card p-3 border-white border-opacity-5 d-flex align-items-center justify-content-between">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="{% if provider.is_enabled %}text-success{% else %}text-dim{% endif %} fs-4">
+                                        <i class="bi {% if provider.provider_type == 'OLLAMA' %}bi-pc-display{% else %}bi-cloud-check{% endif %}"></i>
+                                    </div>
+                                    <div>
+                                        <h6 class="mb-0 text-white">
+                                            {{ provider.name }}
+                                            {% if config.default_llm_provider == provider %}
+                                            <span class="badge bg-primary text-dark ms-2" style="font-size: 0.6rem;">DEFAULT</span>
+                                            {% endif %}
+                                        </h6>
+                                        <small class="text-dim">{{ provider.get_provider_type_display }} • {{ provider.default_model }}</small>
+                                    </div>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-sm btn-glass-toggle edit-provider-btn" 
+                                            data-id="{{ provider.id }}"
+                                            data-name="{{ provider.name }}"
+                                            data-type="{{ provider.provider_type }}"
+                                            data-key="{{ provider.api_key }}"
+                                            data-url="{{ provider.base_url }}"
+                                            data-model="{{ provider.default_model }}"
+                                            data-enabled="{{ provider.is_enabled|yesno:'true,false' }}"
+                                            data-default="{% if config.default_llm_provider_id == provider.id %}true{% else %}false{% endif %}">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger border-0" onclick="deleteProvider({{ provider.id }})">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        {% empty %}
+                        <div class="col-12 text-center py-4">
+                            <i class="bi bi-robot fs-1 text-dim opacity-10 mb-2 d-block"></i>
+                            <p class="text-dim small">No AI substrates initialized.</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
             
         </div>
     </div>
@@ -121,6 +185,78 @@
             <div class="modal-footer border-white border-opacity-5">
                 <button type="button" class="btn btn-primary px-4" data-bs-dismiss="modal">Protocol Complete</button>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- AI Provider Modal -->
+<div class="modal fade" id="providerModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content glass-surface border-experimental">
+            <div class="modal-header border-white border-opacity-5">
+                <h5 class="modal-title text-white">AI SUBSTRATE <span class="text-experimental">CONFIGURATION</span></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="providerForm">
+                <div class="modal-body p-4">
+                    <input type="hidden" id="providerId" value="">
+                    
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="readout-label mb-2 d-block">Substrate Name</label>
+                            <input type="text" id="pName" class="form-control bg-dark border-white border-opacity-10 text-white" placeholder="e.g. Ollama Local" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="readout-label mb-2 d-block">Technology Stack</label>
+                            <select id="pType" class="form-select bg-dark border-white border-opacity-10 text-white" onchange="toggleApiFields()">
+                                {% for code, label in provider_types %}
+                                <option value="{{ code }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="col-12" id="apiKeyField">
+                            <label class="readout-label mb-2 d-block">API Authentication Key</label>
+                            <input type="password" id="pKey" class="form-control bg-dark border-white border-opacity-10 text-white" placeholder="sk-...">
+                        </div>
+                        
+                        <div class="col-12" id="baseUrlField">
+                            <label class="readout-label mb-2 d-block">Endpoint URL</label>
+                            <input type="url" id="pUrl" class="form-control bg-dark border-white border-opacity-10 text-white" placeholder="http://localhost:11434">
+                            <div class="form-text text-dim">Specific endpoint for local or proxy substrates.</div>
+                        </div>
+                        
+                        <div class="col-md-9">
+                            <label class="readout-label mb-2 d-block">Default Model Target</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-dark border-white border-opacity-10 text-experimental"><i class="bi bi-cpu"></i></span>
+                                <select id="pModel" class="form-select bg-dark border-white border-opacity-10 text-white" required>
+                                    <option value="">Sync models to select...</option>
+                                </select>
+                                <button class="btn btn-outline-experimental" type="button" id="btnFetchModels" onclick="fetchProviderModels()">
+                                    <i class="bi bi-arrow-repeat me-1"></i> <span id="fetchLabel">Fetch Models</span>
+                                </button>
+                            </div>
+                            <div class="form-text text-dim">Synchronize and select a validated model from the substrate.</div>
+                        </div>
+                        
+                        <div class="col-md-4 d-flex align-items-end gap-2">
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" id="pEnabled">
+                                <label class="text-white small ms-2">Enabled</label>
+                            </div>
+                            <div class="form-check form-switch mb-2 ms-3">
+                                <input class="form-check-input" type="checkbox" id="pDefault">
+                                <label class="text-white small ms-2">Global Default</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-white border-opacity-5">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Abort</button>
+                    <button type="submit" class="btn btn-primary px-4 fw-bold text-dark">Apply Configuration</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -232,6 +368,167 @@ document.getElementById('settingsForm').addEventListener('submit', function(e) {
         alert("An error occurred preserving settings.");
     });
 });
+
+// AI Provider Logic
+let providerModal;
+document.addEventListener('DOMContentLoaded', () => {
+    providerModal = new bootstrap.Modal(document.getElementById('providerModal'));
+});
+
+function openProviderModal() {
+    document.getElementById('providerId').value = '';
+    document.getElementById('providerForm').reset();
+    document.getElementById('pEnabled').checked = true;
+    toggleApiFields();
+    providerModal.show();
+}
+
+function editProvider(id, name, type, key, url, model, enabled, isDefault) {
+    document.getElementById('providerId').value = id;
+    document.getElementById('pName').value = name;
+    document.getElementById('pType').value = type;
+    document.getElementById('pKey').value = key;
+    document.getElementById('pUrl').value = url;
+    
+    // Pre-populate select with current model so it's not empty
+    const modelSelect = document.getElementById('pModel');
+    modelSelect.innerHTML = `<option value="${model}" selected>${model}</option>`;
+    
+    document.getElementById('pEnabled').checked = enabled === true || enabled === 'true';
+    document.getElementById('pDefault').checked = isDefault === true || isDefault === 'true';
+    toggleApiFields();
+    providerModal.show();
+}
+
+document.addEventListener('click', function(e) {
+    if (e.target.closest('.edit-provider-btn')) {
+        const btn = e.target.closest('.edit-provider-btn');
+        editProvider(
+            btn.dataset.id,
+            btn.dataset.name,
+            btn.dataset.type,
+            btn.dataset.key,
+            btn.dataset.url,
+            btn.dataset.model,
+            btn.dataset.enabled,
+            btn.dataset.default
+        );
+    }
+});
+
+function toggleApiFields() {
+    const type = document.getElementById('pType').value;
+    const keyField = document.getElementById('apiKeyField');
+    const urlField = document.getElementById('baseUrlField');
+    
+    // Cloud needs key, Local needs URL
+    if (['OLLAMA', 'OPENWEBUI', 'ANYTHINGLLM', 'CUSTOM'].includes(type)) {
+        urlField.style.display = 'block';
+    } else {
+        urlField.style.display = 'none';
+    }
+}
+
+document.getElementById('providerForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const payload = {
+        id: document.getElementById('providerId').value,
+        name: document.getElementById('pName').value,
+        provider_type: document.getElementById('pType').value,
+        api_key: document.getElementById('pKey').value,
+        base_url: document.getElementById('pUrl').value,
+        default_model: document.getElementById('pModel').value,
+        is_enabled: document.getElementById('pEnabled').checked,
+        set_default: document.getElementById('pDefault').checked
+    };
+
+    fetch('{% url "save_llm_provider_api" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === 'success') {
+            location.reload();
+        } else {
+            alert(data.error);
+        }
+    });
+});
+
+function deleteProvider(id) {
+    if (!confirm('Dismantle this AI substrate configuration?')) return;
+    
+    fetch(`/api/ai/provider/${id}/delete/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === 'success') location.reload();
+    });
+}
+
+async function fetchProviderModels() {
+    const id = document.getElementById('providerId').value;
+    const btn = document.getElementById('btnFetchModels');
+    const label = document.getElementById('fetchLabel');
+    const modelSelect = document.getElementById('pModel');
+    const currentModel = modelSelect.value;
+    
+    const payload = {
+        provider_type: document.getElementById('pType').value,
+        api_key: document.getElementById('pKey').value,
+        base_url: document.getElementById('pUrl').value
+    };
+
+    btn.disabled = true;
+    label.innerText = 'Syncing...';
+
+    try {
+        const endpoint = id ? `/api/ai/provider/${id}/models/` : '/api/ai/provider/discover/';
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}' 
+            },
+            body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            modelSelect.innerHTML = '';
+            data.models.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m;
+                opt.innerText = m;
+                if (m === currentModel) opt.selected = true;
+                modelSelect.appendChild(opt);
+            });
+            
+            label.innerText = 'Models Synced';
+            btn.classList.replace('btn-outline-experimental', 'btn-success');
+            setTimeout(() => {
+                label.innerText = 'Fetch Models';
+                btn.classList.replace('btn-success', 'btn-outline-experimental');
+                btn.disabled = false;
+            }, 2000);
+        } else {
+            alert("Discovery Error: " + (data.message || data.error));
+            label.innerText = 'Fetch Failed';
+            btn.disabled = false;
+        }
+    } catch (err) {
+        alert("Comms Failure: Could not reach substrate.");
+        label.innerText = 'Fetch Models';
+        btn.disabled = false;
+    }
+}
 </script>
 {% endblock %}
 

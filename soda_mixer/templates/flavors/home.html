@@ -74,9 +74,14 @@
                     
                     <div class="row g-3" id="availableIngredients">
                         {% for ingredient in ingredients %}
-                        <div class="col-md-4 col-sm-6 ingredient-card" data-type="{{ ingredient.ingredient_type }}">
-                            <div class="glass-card p-3 h-100 d-flex flex-column align-items-center justify-content-center text-center cursor-pointer"
-                                 onclick="selectIngredient({{ ingredient.id }}, '{{ ingredient.name|escapejs }}', {{ ingredient.intensity }}, '{{ ingredient.category }}')">
+                        <div class="col-md-4 col-sm-6 ingredient-card" 
+                             data-type="{{ ingredient.ingredient_type }}"
+                             data-systems="{{ ingredient.compatible_systems }}">
+                            <div class="glass-card p-3 h-100 d-flex flex-column align-items-center justify-content-center text-center cursor-pointer select-ingredient-btn"
+                                 data-id="{{ ingredient.id }}"
+                                 data-name="{{ ingredient.name }}"
+                                 data-intensity="{{ ingredient.intensity }}"
+                                 data-category="{{ ingredient.category }}">
                                 <span class="fw-bold fs-5 mb-2">{{ ingredient.name }}</span>
                                 <span class="badge-fizz bg-{{ ingredient.category }}">{{ ingredient.category }}</span>
                             </div>
@@ -118,36 +123,42 @@
     </div>
     
     <div class="col-lg-4">
-        <!-- Hall of Fame Card -->
-        <div class="glass-surface overflow-hidden mb-4 border-lab">
-            <div class="px-4 py-3 border-bottom border-white border-opacity-10 d-flex align-items-center justify-content-between">
-                <div class="d-flex align-items-center gap-2">
-                    <i class="bi bi-activity text-gradient-lab"></i>
-                    <h5 class="mb-0">Lab Realtime</h5>
+        <!-- AI Assistant Interface (Permanent Console) -->
+        <div id="ai-chat-panel" class="glass-surface border-lab mb-4 active" style="position: static; width: 100%; height: 500px; display: flex; flex-direction: column;">
+            <div class="ai-chat-header px-3 py-2 border-bottom border-white border-opacity-10">
+                <div class="d-flex align-items-center justify-content-between w-100">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-robot fs-5"></i>
+                        <span class="fw-bold small">LABORATORY ASSISTANT</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-3">
+                        <div id="aiStatus" class="small text-dim ls-1 d-flex align-items-center gap-1" style="font-size: 0.65rem;">
+                            <span class="status-dot"></span> <span id="aiStatusText">DORMANT</span>
+                        </div>
+                        <div class="form-check form-switch mb-0" title="Proactive Guidance">
+                            <input class="form-check-input small" type="checkbox" id="aiProactiveToggle" checked>
+                        </div>
+                    </div>
                 </div>
-                <span class="badge rounded-pill bg-success bg-opacity-10 text-success small">LIVE</span>
             </div>
-            <div class="p-4">
-                <div class="row g-3">
-                    <div class="col-12">
-                        <div class="readout-card">
-                            <div class="readout-label">MVP Substance</div>
-                            <div class="fs-5 fw-bold text-gradient-lab" id="statMvp"></div>
-                        </div>
-                    </div>
-                    <div class="col-12">
-                        <div class="readout-card" style="border-left-color: var(--berry-punch);">
-                            <div class="readout-label">Leading Profile</div>
-                            <div class="fs-5 fw-bold" style="color: var(--berry-punch);" id="statTopCategory"></div>
-                        </div>
-                    </div>
-                    <div class="col-12">
-                        <div class="readout-card" style="border-left-color: var(--fizz-cyan);">
-                            <div class="readout-label">Signature Formula</div>
-                            <div class="fs-5 fw-bold" id="statSignatureMix"></div>
-                        </div>
-                    </div>
+            
+            <div class="warming-indicator" id="aiWarming" style="display: none;">
+                <i class="bi bi-cpu-fill me-1"></i> LLM SUBSTRATE WARMING UP...
+            </div>
+
+            <div class="ai-chat-body flex-grow-1 p-3" id="aiChatBody" style="overflow-y: auto;">
+                <div class="chat-msg msg-assistant">
+                    Hello, Lead Mixologist. I am ready to assist in your flavor syntheses. How shall we experiment today?
                 </div>
+            </div>
+
+            <div class="ai-chat-footer p-0 mt-auto border-top border-white border-opacity-10">
+                <form id="aiChatForm" class="ai-input-group mt-0">
+                    <input type="text" id="aiInput" class="ai-input" placeholder="Consult the assistant..." autocomplete="off">
+                    <button type="submit" class="btn btn-primary btn-sm px-3">
+                        <i class="bi bi-send"></i>
+                    </button>
+                </form>
             </div>
         </div>
 
@@ -177,6 +188,9 @@
     </div>
 </div>
 
+<!-- AI Interface relocated to sidebar grid -->
+
+
 <script>
     let currentLabMode = 'SODA';
     let recommendationMode = 'standard';
@@ -197,6 +211,9 @@
         const savedRecMode = localStorage.getItem('recommendation_mode') || 'standard';
         setLabMode(savedMode, true); 
         setRecommendationMode(savedRecMode);
+        
+        // Trigger initial heartbeat
+        if (typeof heartbeat === 'function') heartbeat();
     });
 
     function setRecommendationMode(mode) {
@@ -219,6 +236,17 @@
             stdBtn.classList.remove('text-dim');
             document.getElementById('mixerSubtitle').textContent = 'Assemble your molecular components.';
         }
+        
+        // Sync the AI chat quick-action buttons to reflect the new mode
+        const quickSafe = document.getElementById('quickSafeBtn');
+        const quickExp = document.getElementById('quickExpBtn');
+        if (quickSafe && quickExp) {
+            quickSafe.classList.toggle('active-safe', mode === 'standard');
+            quickExp.classList.toggle('active-experimental', mode === 'experimental');
+        }
+
+        // Trigger model wakeup on toggle (especially helpful for Experimental mode)
+        if (typeof heartbeat === 'function') heartbeat();
         
         if (selectedIngredients.length > 0) {
             fetchRecommendations();
@@ -249,12 +277,27 @@
         const cards = document.querySelectorAll('.ingredient-card');
         cards.forEach(card => {
             const type = card.getAttribute('data-type');
+            const systems = card.getAttribute('data-systems') || "SODA,COFFEE,SLUSHIE";
+            const systemList = systems.split(',');
+            
+            let isTypeMatch = false;
             if (mode === 'SODA') {
-                card.style.display = (type === 'SODA_SYRUP' || type === 'ADDITIVE' || type === 'OTHER') ? 'block' : 'none';
+                isTypeMatch = (type === 'SODA_SYRUP' || type === 'ADDITIVE' || type === 'OTHER');
             } else if (mode === 'COFFEE') {
-                card.style.display = (type === 'COFFEE_BEAN' || type === 'ADDITIVE' || type === 'OTHER') ? 'block' : 'none';
+                isTypeMatch = (type === 'COFFEE_BEAN' || type === 'ADDITIVE' || type === 'OTHER');
             } else if (mode === 'SLUSHIE') {
-                card.style.display = (type === 'SODA_SYRUP' || type === 'ADDITIVE' || type === 'OTHER') ? 'block' : 'none';
+                isTypeMatch = (type === 'SODA_SYRUP' || type === 'ADDITIVE' || type === 'OTHER');
+            }
+            
+            const isSystemMatch = systemList.includes(mode);
+            const isExperimental = (recommendationMode === 'experimental');
+            
+            // In experimental mode, we bypass the system list check but keep the type check 
+            // for basic sanity (e.g., don't show beans in a soda mix by default).
+            if (isExperimental) {
+                card.style.display = isTypeMatch ? 'block' : 'none';
+            } else {
+                card.style.display = (isTypeMatch && isSystemMatch) ? 'block' : 'none';
             }
         });
         
@@ -271,17 +314,7 @@
         }
         document.getElementById('drinkTypeField').value = mode;
         
-        // Update Hall of Fame Stats
-        const currentStats = themeStats[mode] || { mvp_ingredient: '-', top_category: '-', signature_mix_name: '-' };
-        document.getElementById('statMvp').textContent = currentStats.mvp_ingredient;
-        document.getElementById('statTopCategory').textContent = currentStats.top_category;
-        
-        const mixContainer = document.getElementById('statSignatureMix');
-        if (currentStats.signature_mix_url) {
-            mixContainer.innerHTML = `<a href="${currentStats.signature_mix_url}" class="text-decoration-none text-white hover-lime">${currentStats.signature_mix_name}</a>`;
-        } else {
-            mixContainer.textContent = currentStats.signature_mix_name;
-        }
+        // Hall of Fame stats removed in favor of AI Assistant
         
         // Filter Recent Recipes to 5 matching the theme
         const recentCards = document.querySelectorAll('.recent-recipe-card');
@@ -308,11 +341,70 @@
     }
 
     function selectIngredient(id, name, intensity, category) {
-        selectedIngredients.push({id: id, name: name, intensity: intensity, category: category});
+        selectedIngredients.push({id: id, name: name, intensity: parseInt(intensity), category: category});
         document.getElementById('resetBtn').style.display = 'block';
         updateSelectedArea();
         fetchRecommendations();
+
+        // After 3rd ingredient: synthesize flavor report. Before: suggest next ingredient.
+        if (selectedIngredients.length >= 3) {
+            triggerFlavorSynthesis();
+        } else {
+            triggerProactiveSuggestion();
+        }
     }
+
+    async function triggerFlavorSynthesis() {
+        appendChatMessage('assistant', "Compiling synthesis report...", 'thinking');
+        const warming = document.getElementById('aiWarming');
+        warming.style.display = 'block';
+
+        try {
+            const r = await fetch('/api/ai/synthesize/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+                body: JSON.stringify({
+                    ingredients: selectedIngredients,
+                    drink_type: currentLabMode
+                })
+            });
+            const data = await r.json();
+            warming.style.display = 'none';
+            const thinking = document.querySelector('.msg-thinking');
+            if (thinking) thinking.remove();
+
+            if (data.status === 'success') {
+                // Render as a styled synthesis report card
+                const html = `
+                    <div class="mb-1" style="font-size:0.65rem; font-weight:700; letter-spacing:0.1em; color:var(--lab-accent); text-transform:uppercase;">
+                        ⚗️ Compound Synthesis Report
+                    </div>
+                    <div style="font-size:0.82rem; line-height:1.6; white-space:pre-line;">${data.summary}</div>
+                `;
+                appendChatMessage('assistant', html);
+                aiChatHistory.push({role: 'assistant', content: data.summary});
+            } else {
+                appendChatMessage('assistant', "Laboratory Error: " + (data.error || 'Synthesis report failed.'));
+            }
+        } catch (err) {
+            warming.style.display = 'none';
+            const thinking = document.querySelector('.msg-thinking');
+            if (thinking) thinking.remove();
+            appendChatMessage('assistant', "Connectivity Error: Could not reach the synthesis substrate.");
+        }
+    }
+
+    document.addEventListener('click', function(e) {
+        if (e.target.closest('.select-ingredient-btn')) {
+            const btn = e.target.closest('.select-ingredient-btn');
+            selectIngredient(
+                btn.dataset.id,
+                btn.dataset.name,
+                btn.dataset.intensity,
+                btn.dataset.category
+            );
+        }
+    });
 
     function resetMixer() {
         selectedIngredients = [];
@@ -536,6 +628,210 @@
             document.getElementById('mixerForm').submit();
         });
     }
+
+    // AI Assistant Logic (Globally Initialized)
+    let aiChatHistory = [];
+    
+    document.getElementById('aiChatForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const input = document.getElementById('aiInput');
+        const userInput = input.value.trim();
+        if (!userInput) return;
+
+        appendChatMessage('user', userInput);
+        appendChatMessage('assistant', "Consulting Laboratory Substrate...", 'thinking');
+        input.value = '';
+
+        const payload = {
+            message: userInput,
+            history: aiChatHistory,
+            mode: recommendationMode
+        };
+
+        const warming = document.getElementById('aiWarming');
+        warming.style.display = 'block';
+
+        fetch('/api/ai/chat/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+            body: JSON.stringify(payload)
+        })
+        .then(r => r.json())
+        .then(data => {
+            warming.style.display = 'none';
+            const thinking = document.querySelector('.msg-thinking');
+            if (thinking) thinking.remove();
+
+            if (data.status === 'success') {
+                appendChatMessage('assistant', data.suggestion);
+                aiChatHistory.push({role: 'user', content: userInput});
+                aiChatHistory.push({role: 'assistant', content: data.suggestion});
+                if (aiChatHistory.length > 20) aiChatHistory.splice(0, 2);
+                updateAIStatus('warm');
+            } else {
+                appendChatMessage('assistant', "Laboratory Error: " + data.error);
+                updateAIStatus('dormant');
+            }
+        })
+        .catch(err => {
+            warming.style.display = 'none';
+            const thinking = document.querySelector('.msg-thinking');
+            if (thinking) thinking.remove();
+            appendChatMessage('assistant', "Connectivity Error: Failed to reach the assistant substrate.");
+            updateAIStatus('dormant');
+        });
+    });
+
+    function appendChatMessage(role, text, extraClass = '') {
+        const body = document.getElementById('aiChatBody');
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `chat-msg msg-${role} ${extraClass}`;
+        msgDiv.innerHTML = text; // Upgrade to innerHTML for interactive elements
+        body.appendChild(msgDiv);
+        body.scrollTop = body.scrollHeight;
+        return msgDiv;
+    }
+
+    //快捷按钮 — mode switching ONLY, no LLM call
+    function quickAIAction(type) {
+        const mode = type === 'experimental' ? 'experimental' : 'standard';
+        setRecommendationMode(mode); // setRecommendationMode handles button visual sync
+    }
+
+    let suggestTimeout;
+    let currentSuggestions = []; // Tracking for "More Options" exclusion
+
+    async function triggerProactiveSuggestion(isMore = false) {
+        // Only block automatic suggestions if the proactive toggle is off.
+        // Explicit user clicks (isMore=true) always proceed.
+        if (!isMore && !document.getElementById('aiProactiveToggle').checked) return;
+        if (selectedIngredients.length === 0) return;
+
+        clearTimeout(suggestTimeout);
+        suggestTimeout = setTimeout(async () => {
+            appendChatMessage('assistant', "Analyzing reagents...", 'thinking');
+
+            const payload = {
+                ingredients: selectedIngredients.map(i => i.name),
+                mode: recommendationMode,
+                exclude: isMore ? currentSuggestions : []
+            };
+
+            const warming = document.getElementById('aiWarming');
+            warming.style.display = 'block';
+
+            try {
+                const r = await fetch('/api/ai/suggest/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await r.json();
+                warming.style.display = 'none';
+                
+                const thinking = document.querySelector('.msg-thinking');
+                if (thinking) thinking.remove();
+
+                if (data.status === 'success') {
+                    if (data.suggestions && data.suggestions.length > 0) {
+                        currentSuggestions = data.suggestions.map(s => s.name);
+                        
+                        let html = `<div class="suggestion-header mb-2 small text-dim uppercase">Molecular Affinity Matches</div>`;
+                        data.suggestions.forEach(s => {
+                            html += `
+                                <div class="glass-card p-2 mb-2 border-accent border-opacity-25 hover-glow cursor-pointer transition-all" 
+                                     onclick="selectIngredient(${s.id}, '${s.name.replace(/'/g, "\\'")}', ${s.intensity}, '${s.category}')">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span class="fw-bold text-accent">${s.name}</span>
+                                        <span class="badge-fizz bg-${s.category} py-0 px-1" style="font-size:0.6rem;">${s.category}</span>
+                                    </div>
+                                    <div class="small text-white opacity-75 mt-1" style="font-size:0.75rem; line-height:1.2;">
+                                        ${s.reason}
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        
+                        html += `
+                            <button class="btn btn-sm btn-accent w-100 mt-3 py-2 fw-bold" style="color: #0a0f19;" 
+                                    onclick="triggerProactiveSuggestion(true)" id="moreAiOptionsBtn">
+                                <i class="bi bi-arrow-repeat me-1"></i> SYNTHESIZE PRECISE ALTERNATIVES
+                            </button>
+                        `;
+                        
+                        appendChatMessage('assistant', html);
+                        aiChatHistory.push({role: 'assistant', content: "[Structured Suggestions Provided]"});
+                    } else {
+                        appendChatMessage('assistant', data.suggestion);
+                        aiChatHistory.push({role: 'assistant', content: data.suggestion});
+                    }
+                }
+            } catch (err) {
+                warming.style.display = 'none';
+                const thinking = document.querySelector('.msg-thinking');
+                if (thinking) thinking.remove();
+            }
+        }, isMore ? 100 : 1500); 
+    }
+
+    // Heartbeat for Local LLMs
+    let statusText = document.getElementById('aiStatusText');
+    let statusDot = document.querySelector('.status-dot');
+
+    function updateAIStatus(state) {
+        if (state === 'waking') {
+            statusText.innerText = 'WAKING...';
+            statusText.className = 'text-warning';
+            statusDot.className = 'status-dot dot-warning';
+        } else if (state === 'warm') {
+            statusText.innerText = 'SYNCHRONIZED';
+            statusText.className = 'text-accent';
+            statusDot.className = 'status-dot dot-accent';
+        } else {
+            statusText.innerText = 'DORMANT';
+            statusText.className = 'text-dim';
+            statusDot.className = 'status-dot';
+        }
+    }
+
+    const heartbeat = () => {
+        updateAIStatus('waking');
+        const controller = new AbortController();
+        // Abort if the server doesn't respond within 15s — prevents hanging worker threads
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+        fetch('/api/ai/pulse/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+            signal: controller.signal
+        })
+        .then(r => r.json())
+        .then(data => {
+            clearTimeout(timeoutId);
+            if (data.status === 'pulsed') {
+                updateAIStatus('warm');
+                // Visual feedback for heartbeat
+                const pulse = document.getElementById('aiPulse');
+                pulse.style.display = 'block';
+                setTimeout(() => { pulse.style.display = 'none'; }, 2000);
+            } else {
+                updateAIStatus('dormant');
+            }
+        })
+        .catch(() => {
+            clearTimeout(timeoutId);
+            updateAIStatus('dormant');
+        });
+    };
+
+    function initiateHeartbeat() {
+        // Pulsate immediately on startup
+        heartbeat();
+        // Every 8 minutes — Ollama's keep_alive is set to 10m so this keeps the model warm
+        setInterval(heartbeat, 8 * 60 * 1000);
+    }
+
+    initiateHeartbeat();
 </script>
 
 {% endblock %}

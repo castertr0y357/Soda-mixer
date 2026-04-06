@@ -12,12 +12,15 @@ from django.core.exceptions import ValidationError
 from django.contrib.auth.decorators import user_passes_test
 import json
 import requests
+import traceback
+from django.contrib.auth import login, logout, authenticate
 
-from .models import Ingredient, Recipe, RecipeIngredient, MixHistory, MixHistoryIngredient, RecipeCategory, SystemConfiguration
+from .models import Ingredient, Recipe, RecipeIngredient, MixHistory, MixHistoryIngredient, RecipeCategory, SystemConfiguration, LLMProvider
 from .recommendations import (
     get_recommendation, get_tiered_recommendation, calculate_recipe_stats,
     generate_recipe_name, suggest_categories
 )
+from .ai_service import AIAssistant
 
 
 def home(request):
@@ -111,6 +114,9 @@ def add_ingredient(request):
     sweetness = request.POST.get('sweetness', 3)
     acidity = request.POST.get('acidity', 3)
     bitterness = request.POST.get('bitterness', 1)
+    
+    systems = request.POST.getlist('compatible_systems')
+    compatible_systems = ",".join(systems) if systems else "SODA,COFFEE,SLUSHIE"
 
     if name:
         Ingredient.objects.create(
@@ -122,6 +128,7 @@ def add_ingredient(request):
             sweetness=sweetness,
             acidity=acidity,
             bitterness=bitterness,
+            compatible_systems=compatible_systems,
             is_in_inventory=True
         )
     return redirect('ingredient_list')
@@ -143,6 +150,10 @@ def edit_ingredient(request, pk):
         ingredient.category = category
         
     ingredient.description = request.POST.get('description', ingredient.description)
+    
+    systems = request.POST.getlist('compatible_systems')
+    if systems:
+        ingredient.compatible_systems = ",".join(systems)
     
     try:
         ingredient.intensity = int(request.POST.get('intensity', ingredient.intensity))
@@ -403,7 +414,12 @@ def delete_recipe(request, pk):
 def settings_view(request):
     """Settings page for backups and system management."""
     config = SystemConfiguration.get_config()
-    return render(request, 'flavors/settings.html', {'config': config})
+    providers = LLMProvider.objects.all().order_by('name')
+    return render(request, 'flavors/settings.html', {
+        'config': config,
+        'providers': providers,
+        'provider_types': LLMProvider.PROVIDER_CHOICES
+    })
 
 
 def export_data(request):
@@ -859,3 +875,290 @@ def _get_compatible_categories(category):
         'coffee': ['spice', 'sweet', 'herbal'], # Added coffee compatibility
     }
     return compatibility_map.get(category, [])
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def ai_chat_api(request):
+    """Bridge the user to the Creative Mixologist AI Assistant."""
+    try:
+        data = json.loads(request.body)
+        user_message = data.get('message', '').strip()
+        history = data.get('history', [])
+        current_ingredients = data.get('current_ingredients', []) # List of names
+        
+        if not user_message and not current_ingredients:
+            return JsonResponse({'error': 'No input provided'}, status=400)
+            
+        # Enrich prompt with laboratory context
+        lab_context = ""
+        if current_ingredients:
+            lab_context = f"\n\n[Laboratory Context: Current Compound Contains: {', '.join(current_ingredients)}]"
+        
+        # Get full inventory registry for AI context
+        all_ingredients = Ingredient.objects.filter(is_in_inventory=True)
+        registry = []
+        for ing in all_ingredients:
+            registry.append(f"{ing.name} ({ing.get_ingredient_type_display()}, {ing.category.title() if ing.category else 'Misc'}, Intensity: {ing.intensity}/5)")
+        inventory_context = "\n".join(registry)
+
+        prompt = user_message + lab_context
+        response_text = AIAssistant.chat(prompt, history=history, context=inventory_context)
+        
+        # Consistent response key for frontend
+        return JsonResponse({'suggestion': response_text, 'status': 'success'})
+    except Exception as e:
+        traceback.print_exc()
+        return JsonResponse({'error': f"Laboratory Communication Failure: {str(e)}"}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def ai_keep_warm_api(request):
+    """Check provider status and keep local models warm in VRAM."""
+    status = AIAssistant.check_status()
+    # 'pulsed' is the legacy key the frontend checks — map synchronized → pulsed
+    return JsonResponse({'status': 'pulsed' if status == 'synchronized' else status})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def save_llm_provider_api(request):
+    """Manage multiple LLM providers (Cloud and Local)."""
+    if not request.user.is_staff:
+        return JsonResponse({'error': 'Staff authentication required.'}, status=403)
+        
+    try:
+        data = json.loads(request.body)
+        pk = data.get('id')
+        
+        if pk:
+            provider = get_object_or_404(LLMProvider, pk=pk)
+        else:
+            provider = LLMProvider()
+            
+        provider.name = data.get('name', 'New Provider').strip()
+        provider.provider_type = data.get('provider_type', 'OPENAI')
+        provider.api_key = data.get('api_key', '').strip()
+        provider.base_url = data.get('base_url', '').strip()
+        provider.default_model = data.get('default_model', '').strip()
+        provider.is_enabled = data.get('is_enabled', False)
+        provider.save()
+        
+        # If this is set as default
+        if data.get('set_default', False):
+            config = SystemConfiguration.get_config()
+            config.default_llm_provider = provider
+            config.save()
+            
+        # Trigger an immediate wakeup pulse if enabled
+        if provider.is_enabled:
+            AIAssistant.keep_warm()
+            
+        return JsonResponse({'status': 'success', 'id': provider.id})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def delete_llm_provider_api(request, pk):
+    """Remove an LLM provider configuration."""
+    if not request.user.is_staff:
+        return JsonResponse({'error': 'Forbidden'}, status=403)
+    provider = get_object_or_404(LLMProvider, pk=pk)
+    provider.delete()
+    return JsonResponse({'status': 'success'})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def fetch_provider_models_api(request, pk):
+    """Fetch available models for a specific AI provider."""
+    provider = get_object_or_404(LLMProvider, pk=pk)
+    models = AIAssistant.list_models(provider)
+    if models:
+        return JsonResponse({'status': 'success', 'models': models})
+    else:
+        return JsonResponse({'status': 'error', 'message': 'Could not fetch models. Check API keys and base URL.'}, status=400)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def discover_provider_models_api(request):
+    """Fetch models for unsaved provider credentials."""
+    if not request.user.is_staff:
+        return JsonResponse({'error': 'Staff credentials required.'}, status=403)
+        
+    try:
+        data = json.loads(request.body)
+        provider_type = data.get('provider_type')
+        api_key = data.get('api_key', '')
+        base_url = data.get('base_url', '')
+        
+        if not provider_type:
+            return JsonResponse({'error': 'Provider technology stack required.'}, status=400)
+            
+        # Create a temporary, unsaved object for the model list call
+        temp_provider = LLMProvider(
+            provider_type=provider_type,
+            api_key=api_key,
+            base_url=base_url
+        )
+        
+        models = AIAssistant.list_models(temp_provider)
+        if models:
+            return JsonResponse({'status': 'success', 'models': models})
+        else:
+            return JsonResponse({'status': 'error', 'message': 'Discovery Protocol: No models found or credentials rejected.'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': f"Molecular Sync Failed: {str(e)}"}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def login_api(request):
+    """AJAX login endpoint for the laboratory."""
+    try:
+        data = json.loads(request.body)
+        username = data.get('username')
+        password = data.get('password')
+        
+        user = authenticate(request, username=username, password=password)
+        if user is not None:
+            login(request, user)
+            return JsonResponse({'status': 'success', 'user': user.username})
+        else:
+            return JsonResponse({'status': 'error', 'message': 'Invalid laboratory credentials.'}, status=401)
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def logout_api(request):
+    """AJAX logout endpoint."""
+    logout(request)
+    return JsonResponse({'status': 'success'})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def ai_suggest_api(request):
+    """Get proactive, structured multi-suggestions from the assistant."""
+    try:
+        data = json.loads(request.body)
+        ingredients = data.get('ingredients', [])
+        mode = data.get('mode', 'standard')
+        exclude = data.get('exclude', []) # For more options
+        
+        if not ingredients:
+            return JsonResponse({'error': 'No ingredients provided.'}, status=400)
+            
+        # Get full inventory registry for AI context
+        all_ingredients = Ingredient.objects.filter(is_in_inventory=True)
+        registry = [f"{ing.name} ({ing.get_ingredient_type_display()}, {ing.category.title() if ing.category else 'Misc'}, Intensity: {ing.intensity}/5)" for ing in all_ingredients]
+        inventory_context = "\n".join(registry)
+
+        # Implementation of 🧪 AI Protocol: Automated Retry & Verification
+        # Up to 3 attempts (1 initial + 2 retries) to get structured data
+        raw_suggestion = ""
+        retry_note = None
+        
+        for attempt in range(3):
+            raw_suggestion = AIAssistant.suggest_autonomous(
+                ingredients, mode, 
+                inventory=inventory_context, 
+                exclude=exclude,
+                retry_note=retry_note
+            )
+            
+            # Attempt to parse JSON multi-suggestions
+            try:
+                # Strip markdown code fences if the model wrapped the JSON
+                cleaned = raw_suggestion.strip()
+                if cleaned.startswith('```'):
+                    # Remove opening fence (```json or ```)
+                    cleaned = cleaned.split('\n', 1)[-1]
+                if cleaned.endswith('```'):
+                    cleaned = cleaned.rsplit('```', 1)[0]
+                cleaned = cleaned.strip()
+                
+                # Find the outermost JSON array
+                start = cleaned.find('[')
+                end = cleaned.rfind(']') + 1
+                if start != -1 and end > start:
+                    suggested_data = json.loads(cleaned[start:end])
+                    
+                    # Enrich with database IDs and categories
+                    enriched = []
+                    for item in suggested_data:
+                        ing_name = item.get('name', '')
+                        # Case-insensitive best match
+                        ing_obj = Ingredient.objects.filter(name__iexact=ing_name, is_in_inventory=True).first()
+                        if ing_obj:
+                            enriched.append({
+                                'id': ing_obj.id,
+                                'name': ing_obj.name,
+                                'category': ing_obj.category,
+                                'intensity': ing_obj.intensity,
+                                'reason': item.get('reason', 'Molecular Affinity Match')
+                            })
+                    
+                    if enriched:
+                        # SUCCESS: Break out and return cards
+                        return JsonResponse({'status': 'success', 'suggestions': enriched})
+                
+                # If we get here, parsing failed or no ingredients found
+                retry_note = "Your last response didn't contain valid ingredients from the registry in a JSON array. Please try again with ONLY the JSON array."
+            except Exception as e:
+                # Parsing failed
+                retry_note = f"JSON Parse Error: {str(e)}. Please fix your output format."
+            
+            # Brief logging if needed (console only)
+
+        # Final Fallback: If all 3 attempts failed to produce cards, return raw text
+        return JsonResponse({'status': 'success', 'suggestion': raw_suggestion})
+    except Exception as e:
+        traceback.print_exc()
+        return JsonResponse({'error': f"Autonomous Suggestion Failed: {str(e)}"}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def ai_synthesize_api(request):
+    """Generate a flavor synthesis report for a finalized compound."""
+    try:
+        data = json.loads(request.body)
+        ingredients = data.get('ingredients', [])  # list of {name, intensity, category}
+        drink_type = data.get('drink_type', 'SODA')
+        
+        if not ingredients:
+            return JsonResponse({'error': 'No ingredients provided.'}, status=400)
+        
+        summary = AIAssistant.synthesize_flavor_summary(ingredients, drink_type)
+        return JsonResponse({'status': 'success', 'summary': summary})
+    except Exception as e:
+        traceback.print_exc()
+        return JsonResponse({'error': f"Synthesis Report Failed: {str(e)}"}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def ai_analyze_ingredient_api(request):
+    """Use the LLM to synthesize a chemical flavor profile for a new ingredient."""
+    try:
+        data = json.loads(request.body)
+        name = data.get('name')
+        description = data.get('description', '')
+        
+        if not name:
+            return JsonResponse({'error': 'Ingredient name required for analysis.'}, status=400)
+            
+        profile = AIAssistant.analyze_flavor_profile(name, description)
+        if profile:
+            return JsonResponse({'status': 'success', 'profile': profile})
+        else:
+            return JsonResponse({'error': 'Chemical analysis failed to yield structured data.'}, status=500)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)

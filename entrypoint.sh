@@ -38,7 +38,7 @@ if not User.objects.filter(username=username).exists():
     print(f"Creating default lab administrator: {username}")
     User.objects.create_superuser(username, email, password)
 else:
-    print(f"Lab administrator '{username}' already exists.")
+    print(f"Laboratory administrator '{username}' is synchronized.")
 EOF
 
 # Start server
