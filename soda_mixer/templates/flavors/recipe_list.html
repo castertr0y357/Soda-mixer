@@ -79,11 +79,15 @@
             </div>
         </div>
     </div>
-    {% empty %}
-    <div class="col-12 text-center py-5">
-        <i class="bi bi-book display-4 text-muted mb-3 d-block"></i>
-        <p class="text-muted mt-3">{% if active_category_id %}No formulas in this classification.{% else %}No records available.{% endif %}</p>
-        <a href="{% url 'home' %}" class="btn btn-primary px-4">Begin Synthesis</a>
+    <div class="col-12 text-center py-5 glass-card border-dashed">
+        <div class="py-5">
+            <i class="bi bi-book display-4 text-dim mb-4 d-block opacity-25"></i>
+            <h4 class="text-white mb-2">Laboratory Notebook is Empty</h4>
+            <p class="text-dim mb-4">{% if active_category_id %}No formulas detected in this classification cluster.{% else %}No archived experimental results found in the registry.{% endif %}</p>
+            <a href="{% url 'home' %}" class="btn btn-accent px-5 py-2 fw-black">
+                <i class="bi bi-plus-circle me-1"></i> Initiate Synthesis Protocol
+            </a>
+        </div>
     </div>
     {% endfor %}
 </div>

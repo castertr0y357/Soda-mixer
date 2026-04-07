@@ -39,17 +39,17 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto gap-2">
                     <li class="nav-item">
-                        <a class="nav-link {% if request.resolver_match.url_name == 'home' %}active{% endif %}" href="{% url 'home' %}">Lab Mixer</a>
+                        <a class="nav-link {% if request.resolver_match.url_name == 'home' %}active{% endif %}" href="{% url 'home' %}">Synthesis Terminal</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if request.resolver_match.url_name == 'ingredient_list' or request.resolver_match.url_name == 'ingredient_detail' %}active{% endif %}" href="{% url 'ingredient_list' %}">Ingredients</a>
+                        <a class="nav-link {% if request.resolver_match.url_name == 'ingredient_list' or request.resolver_match.url_name == 'ingredient_detail' %}active{% endif %}" href="{% url 'ingredient_list' %}">Reagent Registry</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link {% if request.resolver_match.url_name == 'recipe_list' or request.resolver_match.url_name == 'create_recipe' or request.resolver_match.url_name == 'edit_recipe' or request.resolver_match.url_name == 'recipe_detail' %}active{% endif %}" href="{% url 'recipe_list' %}">Notebook</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link {% if request.resolver_match.url_name == 'mix_history_list' %}active{% endif %}" href="{% url 'mix_history_list' %}">
-                            History
+                            Archives
                         </a>
                     </li>
                     {% if user.is_authenticated %}
@@ -60,12 +60,6 @@
                     </li>
                     <li class="nav-item">
                         <button class="nav-link text-dim" onclick="handleLaboratoryLogout()">Logout</button>
-                    </li>
-                    {% else %}
-                    <li class="nav-item ms-lg-2">
-                        <button class="btn btn-primary btn-sm px-3" data-bs-toggle="modal" data-bs-target="#loginModal">
-                            <i class="bi bi-lock-fill"></i> Access Lab
-                        </button>
                     </li>
                     {% endif %}
                 </ul>
@@ -78,8 +72,16 @@
         <div class="row">
             <div class="col-lg-8 mx-auto">
                 {% for message in messages %}
-                <div class="alert alert-{{ message.tags }} alert-dismissible bg-dark text-white border-{{ message.tags }} fade show" role="alert">
-                    {{ message }}
+                <div class="alert glass-surface border-{{ message.tags|default:'info' }} bg-opacity-20 text-white fade show d-flex align-items-center justify-content-between p-3" role="alert">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="bg-{{ message.tags|default:'info' }} bg-opacity-10 p-2 rounded-circle text-{{ message.tags|default:'info' }}">
+                            <i class="bi bi-broadcast"></i>
+                        </div>
+                        <div>
+                            <div class="readout-label text-{{ message.tags|default:'info' }}" style="font-size: 0.6rem;">LABORATORY SIGNAL</div>
+                            <div class="small fw-bold">{{ message }}</div>
+                        </div>
+                    </div>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
                 </div>
                 {% endfor %}
@@ -97,92 +99,16 @@
         </div>
     </footer>
 
-
-    <!-- Login Modal -->
-    <div class="modal fade glass-modal" id="loginModal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content border-lab-cyan">
-                <div class="modal-header border-0 pb-0">
-                    <h5 class="modal-title fw-bold text-white"><i class="bi bi-shield-lock text-gradient-lab me-2"></i>LABORATORY ACCESS</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body pt-4">
-                    <div id="login-error" class="alert alert-danger d-none mb-3"></div>
-                    <form id="lab-login-form">
-                        <div class="mb-3">
-                            <label class="form-label text-dim small uppercase tracking-wider">Scientist ID (Username)</label>
-                            <input type="text" class="form-control bg-dark border-secondary text-white" name="username" required>
-                        </div>
-                        <div class="mb-4">
-                            <label class="form-label text-dim small uppercase tracking-wider">Access Protocol (Password)</label>
-                            <input type="password" class="form-control bg-dark border-secondary text-white" name="password" required>
-                        </div>
-                        <button type="submit" class="btn btn-primary w-100 py-2 fw-bold">INITIATE CLEARANCE</button>
-                    </form>
-                </div>
-                <div class="modal-footer border-0 pt-0 justify-content-center">
-                    <p class="text-dim extra-small mb-3">Unauthorized access is monitored. Beverage Laboratory v3.0</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- Bootstrap Bundle -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     
     <script>
-        // Global Auth Logic
-        async function handleLaboratoryLogin(e) {
-            if (e) e.preventDefault();
-            const form = document.getElementById('lab-login-form');
-            const errorDiv = document.getElementById('login-error');
-            
-            const formData = new FormData(form);
-            const payload = {};
-            formData.forEach((value, key) => payload[key] = value);
-
-            try {
-                const response = await fetch('{% url "login_api" %}', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                
-                const result = await response.json();
-                if (response.ok) {
-                    location.reload();
-                } else {
-                    errorDiv.innerText = result.message || 'Access Denied.';
-                    errorDiv.classList.remove('d-none');
-                }
-            } catch (err) {
-                errorDiv.innerText = 'Laboratory comms link failure.';
-                errorDiv.classList.remove('d-none');
-            }
-        }
-
         async function handleLaboratoryLogout() {
-            await fetch('{% url "logout_api" %}', { method: 'POST' });
-            location.reload();
-        }
-
-        document.getElementById('lab-login-form')?.addEventListener('submit', handleLaboratoryLogin);
-
-        // Global Interceptor for auth failures
-        const originalFetch = window.fetch;
-        window.fetch = async (...args) => {
-            const response = await originalFetch(...args);
-            if (response.status === 401 || response.status === 403) {
-                const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
-                loginModal.show();
-            }
-            return response;
-        };
-
-        // Check for ?login=1 param
-        if (window.location.search.includes('login=1')) {
-            const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
-            loginModal.show();
+            await fetch('{% url "logout_api" %}', { 
+                method: 'POST',
+                headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+            });
+            window.location.href = "{% url 'login' %}";
         }
     </script>
     {% block extra_js %}{% endblock %}

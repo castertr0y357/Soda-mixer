@@ -1,5 +1,7 @@
 import requests
 import json
+import re
+import time
 from .models import LLMProvider, SystemConfiguration
 
 class AIAssistant:
@@ -74,6 +76,7 @@ class AIAssistant:
                 # Generic OpenAI-compatible
                 return cls._call_openai(provider, messages)
         except Exception as e:
+            print(f"DEBUG: Laboratory AI Communication Failure ({provider.name}): {e}")
             return f"Laboratory Error: Failed to reach the assistant ({str(e)})."
 
     @classmethod
@@ -103,7 +106,8 @@ class AIAssistant:
                 # For custom/AnythingLLM, minimal 1-token chat call
                 cls.chat("ping", history=[], provider=provider)
                 return True
-        except Exception:
+        except Exception as e:
+            print(f"DEBUG: Laboratory Wakeup Failure for {provider.name}: {e}")
             return False
 
     @classmethod
@@ -132,7 +136,8 @@ class AIAssistant:
                 return 'synchronized' if models else 'dormant'
             else:
                 return 'dormant'
-        except Exception:
+        except Exception as e:
+            print(f"DEBUG: Laboratory Status Pulse Failure: {e}")
             return 'dormant'
 
     @classmethod
@@ -161,20 +166,21 @@ class AIAssistant:
         exclude_context = f" Exclude these previously suggested items: {', '.join(exclude)}." if exclude else ""
         retry_context = f"\n\nRETRY NOTE: {retry_note}\n" if retry_note else ""
         
-        prompt = f"""STRUCTURED DATA REQUEST — DO NOT RESPOND WITH PROSE.{retry_context}
+        prompt = f"""STRUCTURED DATA REQUEST — DO NOT RESPOND WITH PROSE IF DATA IS AVAILABLE.{retry_context}
 
 Current Compound: {', '.join(ingredients)}
 Mode: {tone}{exclude_context}
 
-Task: Identify EXACTLY 3 ingredients from the Inventory Registry that pair well with the current compound.
+Task: Identify EXACTLY 3 ingredients from the Inventory Registry below that pair well with the current compound.
 
 Rules:
-- ONLY use ingredients present in the Inventory Registry below.
+- USE THE EXACT NOMENCLATURE from the Inventory Registry.
 - Each item needs a short reason (max 8 words) grounded in flavor science.
 - Output MUST be a raw JSON array. No markdown, no backticks, no explanation before or after.
+- IF YOU CANNOT FIND 3 SUITABLE MATCHES according to flavor science, provide a brief (max 20 words) scientific explanation of the chemical conflict instead of JSON.
 
-Required output format (copy this structure exactly):
-[{{"name": "Ingredient Name", "reason": "Flavor science reason"}}, ...]"""
+Required format (copy this structure exactly if responding with JSON):
+[{{"name": "Exact Name from Registry", "reason": "Flavor science reason"}}, ...]"""
         return cls.chat(prompt, context=inventory)
 
     @classmethod
@@ -215,18 +221,47 @@ Do NOT give preparation instructions. Do NOT suggest more ingredients. No markdo
         Base your analysis on chemical flavor profiles.
         """
         response = cls.chat(prompt)
-        # Attempt to extract JSON if the LLM added filler
-        try:
-            start = response.find('{')
-            end = response.rfind('}') + 1
-            if start != -1 and end != -1:
-                return json.loads(response[start:end])
-        except:
-            return None
-        return None
+        # Resilient JSON extraction
+        return cls._extract_json(response)
 
     @staticmethod
-    def _list_openai_models(provider):
+    def _extract_json(text):
+        """Resiliently extract the first JSON object or array from a string."""
+        if not text:
+            return None
+        try:
+            # Look for everything between the first { or [ and the last } or ]
+            match = re.search(r'([\[\{].*[\]\}])', text, re.DOTALL)
+            if match:
+                return json.loads(match.group(1))
+            # Fallback: direct attempt
+            return json.loads(text)
+        except (json.JSONDecodeError, ValueError):
+            return None
+
+    @staticmethod
+    def _safe_request(method, url, attempts=3, timeout=30, **kwargs):
+        """Execute a request with automated retry logic and exponential backoff."""
+        last_error = None
+        for i in range(attempts):
+            try:
+                # Escalating timeout for each retry
+                current_timeout = timeout + (i * 15)
+                response = requests.request(method, url, timeout=current_timeout, **kwargs)
+                response.raise_for_status()
+                return response
+            except (requests.exceptions.RequestException, requests.exceptions.Timeout) as e:
+                last_error = e
+                # Don't sleep on last attempt
+                if i < attempts - 1:
+                    time.sleep(1.5 * (i + 1)) # Exponential backoff: 1.5s, 3s...
+                continue
+        
+        # If we get here, all attempts failed
+        raise last_error
+
+    @classmethod
+    def _list_openai_models(cls, provider):
         url = (provider.base_url or "https://api.openai.com/v1").rstrip('/') + "/models"
         headers = {"Authorization": f"Bearer {provider.api_key}"} if provider.api_key else {}
         if provider.provider_type == 'CLAUDE':
@@ -235,32 +270,29 @@ Do NOT give preparation instructions. Do NOT suggest more ingredients. No markdo
                 "anthropic-version": "2023-06-01"
             }
         
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
+        response = cls._safe_request('GET', url, headers=headers, timeout=10)
         data = response.json()
         return [m['id'] for m in data.get('data', [])]
 
-    @staticmethod
-    def _list_ollama_models(provider):
+    @classmethod
+    def _list_ollama_models(cls, provider):
         url = (provider.base_url or "http://localhost:11434").rstrip('/') + "/api/tags"
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
+        response = cls._safe_request('GET', url, timeout=10)
         data = response.json()
         return [m['name'] for m in data.get('models', [])]
 
-    @staticmethod
-    def _list_gemini_models(provider):
+    @classmethod
+    def _list_gemini_models(cls, provider):
         api_key = provider.api_key
         url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
+        response = cls._safe_request('GET', url, timeout=10)
         data = response.json()
         # Filter for models that support generateContent
         return [m['name'].replace('models/', '') for m in data.get('models', []) 
                 if 'generateContent' in m.get('supportedGenerationMethods', [])]
 
-    @staticmethod
-    def _call_openai(provider, messages):
+    @classmethod
+    def _call_openai(cls, provider, messages):
         url = provider.base_url or "https://api.openai.com/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {provider.api_key}",
@@ -271,12 +303,11 @@ Do NOT give preparation instructions. Do NOT suggest more ingredients. No markdo
             "messages": messages,
             "temperature": 0.7
         }
-        response = requests.post(url, headers=headers, json=data, timeout=30)
-        response.raise_for_status()
+        response = cls._safe_request('POST', url, headers=headers, json=data, timeout=30)
         return response.json()['choices'][0]['message']['content']
 
-    @staticmethod
-    def _call_ollama(provider, messages):
+    @classmethod
+    def _call_ollama(cls, provider, messages):
         # Ollama /api/chat — native format.
         url = (provider.base_url or "http://localhost:11434").rstrip('/') + "/api/chat"
         data = {
@@ -287,12 +318,11 @@ Do NOT give preparation instructions. Do NOT suggest more ingredients. No markdo
                 "num_predict": 512  # Cap generation to prevent runaway responses
             }
         }
-        response = requests.post(url, json=data, timeout=120)
-        response.raise_for_status()
+        response = cls._safe_request('POST', url, json=data, timeout=120)
         return response.json()['message']['content']
 
-    @staticmethod
-    def _call_claude(provider, messages):
+    @classmethod
+    def _call_claude(cls, provider, messages):
         # Very simplified Claude API call
         url = "https://api.anthropic.com/v1/messages"
         headers = {
@@ -310,12 +340,11 @@ Do NOT give preparation instructions. Do NOT suggest more ingredients. No markdo
             "messages": actual_messages,
             "max_tokens": 1024
         }
-        response = requests.post(url, headers=headers, json=data, timeout=30)
-        response.raise_for_status()
+        response = cls._safe_request('POST', url, headers=headers, json=data, timeout=30)
         return response.json()['content'][0]['text']
 
-    @staticmethod
-    def _call_gemini(provider, messages):
+    @classmethod
+    def _call_gemini(cls, provider, messages):
         # Simplified Gemini API call
         api_key = provider.api_key
         model = provider.default_model or "gemini-1.5-flash"
@@ -328,6 +357,5 @@ Do NOT give preparation instructions. Do NOT suggest more ingredients. No markdo
             contents.append({"role": role, "parts": [{"text": m['content']}]})
             
         data = {"contents": contents}
-        response = requests.post(url, json=data, timeout=30)
-        response.raise_for_status()
+        response = cls._safe_request('POST', url, json=data, timeout=30)
         return response.json()['candidates'][0]['content']['parts'][0]['text']

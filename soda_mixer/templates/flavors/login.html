@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid min-vh-100 d-flex align-items-center justify-content-center py-5">
+    <!-- Laboratory Static Background Decor -->
+    <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; 
+                background: radial-gradient(circle at center, hsla(180, 95%, 55%, 0.05) 0%, transparent 70%);"></div>
+
+    <div class="col-12 col-md-6 col-lg-4">
+        <!-- Access Gate Card -->
+        <div class="glass-surface p-5 glow-experimental animate__animated animate__fadeIn">
+            <div class="text-center mb-5">
+                <div class="d-inline-block p-3 mb-3 glass-card border-lab-cyan">
+                    <i class="bi bi-shield-lock-fill fs-1 text-gradient-lab"></i>
+                </div>
+                <h2 class="text-white fw-bold tracking-wider uppercase mb-1">Laboratory Access</h2>
+                <p class="text-dim extra-small ls-1 uppercase">Authentication Protocol Required</p>
+            </div>
+
+            <div id="loginFeedback" class="alert alert-danger glass-card border-danger text-danger small mb-4 py-2" style="display: none;">
+                <i class="bi bi-exclamation-triangle me-2"></i> <span id="feedbackMsg">Access Denied.</span>
+            </div>
+
+            <form id="accessForm" onsubmit="handleAccessGrant(event)">
+                <div class="mb-4">
+                    <label class="readout-label mb-2 d-block">Operator ID</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-transparent border-white border-opacity-10 text-dim">
+                            <i class="bi bi-person-badge"></i>
+                        </span>
+                        <input type="text" id="username" class="form-control bg-dark border-white border-opacity-10 text-white" 
+                               placeholder="Enter Identity..." required autofocus>
+                    </div>
+                </div>
+
+                <div class="mb-5">
+                    <label class="readout-label mb-2 d-block">Security Cipher</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-transparent border-white border-opacity-10 text-dim">
+                            <i class="bi bi-key-fill"></i>
+                        </span>
+                        <input type="password" id="password" class="form-control bg-dark border-white border-opacity-10 text-white" 
+                               placeholder="Enter Code..." required>
+                    </div>
+                </div>
+
+                <div class="d-grid">
+                    <button type="submit" id="submitBtn" class="btn btn-primary py-3 fw-bold tracking-wider uppercase shadow-lg">
+                        <i class="bi bi-unlock-fill me-2"></i> Grant Access
+                    </button>
+                </div>
+            </form>
+
+            <div class="mt-5 pt-4 border-top border-white border-opacity-5 text-center">
+                <p class="text-dim extra-small mb-0">Unauthorized synthesis is strictly prohibited.<br>
+                System logs are currently active.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function handleAccessGrant(e) {
+    e.preventDefault();
+    const btn = document.getElementById('submitBtn');
+    const feedback = document.getElementById('loginFeedback');
+    const feedbackMsg = document.getElementById('feedbackMsg');
+    
+    // UI Feedback: Loading
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Synthesizing Session...';
+    feedback.style.display = 'none';
+
+    const payload = {
+        username: document.getElementById('username').value,
+        password: document.getElementById('password').value
+    };
+
+    try {
+        const response = await fetch('/api/auth/login/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            btn.classList.replace('btn-primary', 'btn-success');
+            btn.innerHTML = '<i class="bi bi-check-circle-fill me-2"></i> Access Granted';
+            
+            // Redirect after a brief visual confirmation
+            setTimeout(() => {
+                window.location.href = "{% url 'home' %}";
+            }, 800);
+        } else {
+            feedbackMsg.innerText = data.message || 'Identity verification failed.';
+            feedback.style.display = 'block';
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-unlock-fill me-2"></i> Grant Access';
+        }
+    } catch (err) {
+        feedbackMsg.innerText = 'Infrastructure comms failure. Try again.';
+        feedback.style.display = 'block';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-unlock-fill me-2"></i> Grant Access';
+    }
+}
+</script>
+
+<style>
+/* Exclusive styling for the login gate to ensure maximum premium feel */
+body {
+    overflow: hidden; /* No scroll on login page */
+}
+.border-lab-cyan {
+    border: 1px solid var(--fizz-cyan) !important;
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.2);
+}
+.glow-experimental {
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.5), 0 0 15px rgba(180, 95%, 55%, 0.1);
+}
+#username:focus, #password:focus {
+    background: rgba(0, 0, 0, 0.8) !important;
+    border-color: var(--fizz-cyan) !important;
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.1) !important;
+}
+</style>
+{% endblock %}

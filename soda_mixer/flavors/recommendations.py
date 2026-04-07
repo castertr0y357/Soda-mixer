@@ -421,7 +421,7 @@ def calculate_recipe_stats(recipe_ingredients):
 
 
 def _get_top_recommendations(drink_type='SODA'):
-    """Get top recommended ingredients."""
+    """Get top recommended base ingredients to start a mix."""
     recommendations = []
     
     # Filter by inventory and type if possible
@@ -429,20 +429,17 @@ def _get_top_recommendations(drink_type='SODA'):
     if drink_type == 'COFFEE':
         query = query.filter(ingredient_type='COFFEE_BEAN')
         
-    popular = query[:10]
+    # Get a diverse, dynamic set of 10 ingredients to serve as bases
+    diverse_bases = query.order_by('?')[:10]
     
-    for ingredient in popular:
-        compat_cats = CATEGORY_COMPATIBILITY.get(ingredient.category, [])
-        matching = Ingredient.objects.filter(category__in=compat_cats, is_in_inventory=True).exclude(id=ingredient.id)[:3]
-        
-        for match in matching:
-            recommendations.append({
-                'ingredient': match,
-                'score': 5,
-                'reason': f"Popular pairing with {ingredient.name}"
-            })
+    for ingredient in diverse_bases:
+        recommendations.append({
+            'ingredient': ingredient,
+            'score': 5,
+            'reason': "Excellent Base Component"
+        })
     
-    return recommendations[:10]
+    return recommendations
 
 
 def _find_similar_recipes(selected_ingredients):

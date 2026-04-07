@@ -175,7 +175,7 @@ class Recipe(models.Model):
 class RecipeIngredient(models.Model):
     """Links an ingredient to a recipe with amount information."""
     recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name='recipe_ingredients')
-    ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE, related_name='ingredient_usage')
+    ingredient = models.ForeignKey(Ingredient, on_delete=models.SET_NULL, null=True, blank=True, related_name='ingredient_usage')
     amount = models.FloatField(
         help_text="Amount (ml for Soda, grams for Coffee)",
         default=1.0
@@ -189,7 +189,8 @@ class RecipeIngredient(models.Model):
             unit = "oz"
         else:
             unit = "ml"
-        return f"{self.recipe.name} - {self.ingredient.name} ({self.amount}{unit})"
+        ing_name = self.ingredient.name if self.ingredient else "Unknown Reagent"
+        return f"{self.recipe.name} - {ing_name} ({self.amount}{unit})"
 
     class Meta:
         unique_together = ['recipe', 'ingredient']
@@ -208,7 +209,7 @@ class MixHistory(models.Model):
     )
 
     def __str__(self):
-        ingredients = ', '.join(mf.ingredient.name for mf in self.mix_ingredients.all()[:3])
+        ingredients = ', '.join(mf.ingredient.name for mf in self.mix_ingredients.all() if mf.ingredient)[:3]
         return f"{self.drink_type} on {self.mixed_at.strftime('%b %d %H:%M')} — {ingredients}"
 
     class Meta:
@@ -219,11 +220,15 @@ class MixHistory(models.Model):
 class MixHistoryIngredient(models.Model):
     """Links an ingredient to a history entry with amount info."""
     mix = models.ForeignKey(MixHistory, on_delete=models.CASCADE, related_name='mix_ingredients')
-    ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE, related_name='mix_usage')
+    ingredient = models.ForeignKey(Ingredient, on_delete=models.SET_NULL, null=True, blank=True, related_name='mix_usage')
     amount = models.FloatField(default=1.0)
 
     def __str__(self):
-        return f"{self.mix} — {self.ingredient.name}"
+        ing_name = self.ingredient.name if self.ingredient else "Unknown Reagent"
+        return f"{self.mix} — {ing_name}"
+
+    class Meta:
+        unique_together = ['mix', 'ingredient']
 
 
 class LLMProvider(models.Model):

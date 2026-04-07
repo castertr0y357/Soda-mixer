@@ -14,6 +14,8 @@ import json
 import requests
 import traceback
 from django.contrib.auth import login, logout, authenticate
+from django.db import IntegrityError
+from django.contrib import messages
 
 from .models import Ingredient, Recipe, RecipeIngredient, MixHistory, MixHistoryIngredient, RecipeCategory, SystemConfiguration, LLMProvider
 from .recommendations import (
@@ -26,7 +28,8 @@ from .ai_service import AIAssistant
 def home(request):
     """Home page with ingredient mixer and Hall of Fame stats."""
     ingredients = Ingredient.objects.filter(is_in_inventory=True)
-    recipes = Recipe.objects.order_by('-updated_at')[:50]
+    # Optimized Archive Fetch
+    recipes = Recipe.objects.prefetch_related('categories', 'recipe_ingredients__ingredient').order_by('-updated_at')[:50]
 
     # Hall of Fame stats by theme
     stats_by_theme = {}
@@ -119,18 +122,21 @@ def add_ingredient(request):
     compatible_systems = ",".join(systems) if systems else "SODA,COFFEE,SLUSHIE"
 
     if name:
-        Ingredient.objects.create(
-            name=name,
-            ingredient_type=ingredient_type,
-            category=category,
-            description=description,
-            intensity=intensity,
-            sweetness=sweetness,
-            acidity=acidity,
-            bitterness=bitterness,
-            compatible_systems=compatible_systems,
-            is_in_inventory=True
-        )
+        try:
+            Ingredient.objects.create(
+                name=name,
+                ingredient_type=ingredient_type,
+                category=category,
+                description=description,
+                intensity=intensity,
+                sweetness=sweetness,
+                acidity=acidity,
+                bitterness=bitterness,
+                compatible_systems=compatible_systems,
+                is_in_inventory=True
+            )
+        except IntegrityError:
+            messages.error(request, f"Registry Conflict: The reagent '{name}' is already indexed in the Laboratory repository.")
     return redirect('ingredient_list')
 
 
@@ -163,7 +169,12 @@ def edit_ingredient(request, pk):
     except ValueError:
         pass
         
-    ingredient.save()
+    try:
+        ingredient.save()
+    except IntegrityError:
+        messages.error(request, f"Registry Conflict: The name '{ingredient.name}' is already assigned to another reagent.")
+        return redirect('ingredient_list')
+        
     return redirect('ingredient_list')
 
 
@@ -256,7 +267,8 @@ def recipe_list(request):
     category_id = request.GET.get('category')
     all_categories = RecipeCategory.objects.all().order_by('name')
 
-    recipes = Recipe.objects.all().order_by('-updated_at')
+    # Optimized Archive Fetch with prefetching
+    recipes = Recipe.objects.prefetch_related('categories', 'recipe_ingredients__ingredient').all().order_by('-updated_at')
     if category_id:
         recipes = recipes.filter(categories__id=category_id)
 
@@ -691,14 +703,24 @@ def save_mix_to_history_api(request):
 
         mix = MixHistory.objects.create(drink_type=drink_type)
         for item in ingredients:
-            ingredient_id = item.get('id')
-            amount = float(item.get('amount', 1.0))
-            if ingredient_id:
-                MixHistoryIngredient.objects.create(
-                    mix=mix,
-                    ingredient_id=int(ingredient_id),
-                    amount=amount
-                )
+            try:
+                raw_id = item.get('id')
+                if not raw_id:
+                    continue
+                
+                ingredient_id = int(raw_id)
+                amount = float(item.get('amount', 1.0))
+                
+                # Verify ingredient existence to prevent broken relations
+                target_ing = Ingredient.objects.filter(id=ingredient_id).first()
+                if target_ing:
+                    MixHistoryIngredient.objects.create(
+                        mix=mix,
+                        ingredient=target_ing,
+                        amount=amount
+                    )
+            except (ValueError, TypeError):
+                continue
 
         return JsonResponse({'status': 'saved', 'mix_id': mix.id})
     except json.JSONDecodeError:
@@ -728,15 +750,19 @@ def promote_mix_to_recipe_api(request, pk):
             drink_type=mix.drink_type
         )
 
+        for mi in mix.mix_ingredients.all():
+            if mi.ingredient:
+                RecipeIngredient.objects.create(
+                    recipe=recipe,
+                    ingredient=mi.ingredient,
+                    amount=mi.amount
+                )
+        
         if category_ids:
-            recipe.categories.set(RecipeCategory.objects.filter(id__in=category_ids))
-
-        for mhi in mix.mix_ingredients.all():
-            RecipeIngredient.objects.create(
-                recipe=recipe,
-                ingredient=mhi.ingredient,
-                amount=mhi.amount
-            )
+            try:
+                recipe.categories.set(RecipeCategory.objects.filter(id__in=[int(cid) for cid in category_ids if str(cid).isdigit()]))
+            except (ValueError, TypeError):
+                pass
 
         mix.promoted_recipe = recipe
         mix.save()
@@ -908,6 +934,7 @@ def ai_chat_api(request):
         # Consistent response key for frontend
         return JsonResponse({'suggestion': response_text, 'status': 'success'})
     except Exception as e:
+        print(f"DEBUG: Laboratory Communication Failure: {str(e)}")
         traceback.print_exc()
         return JsonResponse({'error': f"Laboratory Communication Failure: {str(e)}"}, status=500)
 
@@ -1015,6 +1042,13 @@ def discover_provider_models_api(request):
         return JsonResponse({'error': f"Molecular Sync Failed: {str(e)}"}, status=500)
 
 
+def login_view(request):
+    """Render the dedicated laboratory access gate."""
+    if request.user.is_authenticated:
+        return redirect('home')
+    return render(request, 'flavors/login.html')
+
+
 @csrf_exempt
 @require_http_methods(["POST"])
 def login_api(request):
@@ -1061,11 +1095,11 @@ def ai_suggest_api(request):
         inventory_context = "\n".join(registry)
 
         # Implementation of 🧪 AI Protocol: Automated Retry & Verification
-        # Up to 3 attempts (1 initial + 2 retries) to get structured data
+        # Up to 2 attempts to get structured data
         raw_suggestion = ""
         retry_note = None
         
-        for attempt in range(3):
+        for attempt in range(2):
             raw_suggestion = AIAssistant.suggest_autonomous(
                 ingredients, mode, 
                 inventory=inventory_context, 
@@ -1073,51 +1107,74 @@ def ai_suggest_api(request):
                 retry_note=retry_note
             )
             
-            # Attempt to parse JSON multi-suggestions
-            try:
-                # Strip markdown code fences if the model wrapped the JSON
-                cleaned = raw_suggestion.strip()
-                if cleaned.startswith('```'):
-                    # Remove opening fence (```json or ```)
-                    cleaned = cleaned.split('\n', 1)[-1]
-                if cleaned.endswith('```'):
-                    cleaned = cleaned.rsplit('```', 1)[0]
-                cleaned = cleaned.strip()
-                
-                # Find the outermost JSON array
-                start = cleaned.find('[')
-                end = cleaned.rfind(']') + 1
-                if start != -1 and end > start:
-                    suggested_data = json.loads(cleaned[start:end])
-                    
-                    # Enrich with database IDs and categories
-                    enriched = []
-                    for item in suggested_data:
-                        ing_name = item.get('name', '')
-                        # Case-insensitive best match
-                        ing_obj = Ingredient.objects.filter(name__iexact=ing_name, is_in_inventory=True).first()
-                        if ing_obj:
-                            enriched.append({
-                                'id': ing_obj.id,
-                                'name': ing_obj.name,
-                                'category': ing_obj.category,
-                                'intensity': ing_obj.intensity,
-                                'reason': item.get('reason', 'Molecular Affinity Match')
-                            })
-                    
-                    if enriched:
-                        # SUCCESS: Break out and return cards
-                        return JsonResponse({'status': 'success', 'suggestions': enriched})
-                
-                # If we get here, parsing failed or no ingredients found
-                retry_note = "Your last response didn't contain valid ingredients from the registry in a JSON array. Please try again with ONLY the JSON array."
-            except Exception as e:
-                # Parsing failed
-                retry_note = f"JSON Parse Error: {str(e)}. Please fix your output format."
+            # Use the new resilient JSON extractor
+            suggested_data = AIAssistant._extract_json(raw_suggestion)
             
-            # Brief logging if needed (console only)
+            if suggested_data and isinstance(suggested_data, list):
+                # Molecular Resonance: Multi-tier fuzzy lookup
+                enriched = []
+                inventory_items = list(Ingredient.objects.filter(is_in_inventory=True))
+                
+                for item in suggested_data:
+                    ing_name = item.get('name', '').strip().lower()
+                    if not ing_name: continue
+                    
+                    target_obj = None
+                    
+                    # Tier 1: Exact Match
+                    for inv in inventory_items:
+                        if inv.name.lower() == ing_name:
+                            target_obj = inv
+                            break
+                    
+                    # Tier 2: Partial/Contains Match
+                    if not target_obj:
+                        for inv in inventory_items:
+                            inv_lower = inv.name.lower()
+                            if ing_name in inv_lower or inv_lower in ing_name:
+                                target_obj = inv
+                                break
+                                
+                    if target_obj:
+                        # Calculate Molecular Resonance Level (based on intensity delta and a small random variance)
+                        # We use the first ingredient as a baseline for intensity matching if available
+                        import random
+                        intensity_delta = 0
+                        if ingredients:
+                            # Robust Intensity matching: Case-insensitive lookup for the first protocol reagent
+                            baseline_name = ingredients[0].strip().lower()
+                            first_ing = next((inv for inv in inventory_items if inv.name.lower() == baseline_name), None)
+                            
+                            # Fallback to direct DB query if not in current registry slice
+                            if not first_ing:
+                                first_ing = Ingredient.objects.filter(name__iexact=ingredients[0]).first()
+                            
+                            base_intensity = first_ing.intensity if first_ing else 3
+                            intensity_delta = abs(target_obj.intensity - base_intensity)
+                        
+                        # Resonance score: base 85% + up to 12% bonus for intensity proximity + small random flux
+                        resonance = 85 + (max(0, 3 - intensity_delta) * 4) + random.uniform(0.1, 2.5)
+                        
+                        enriched.append({
+                            'id': target_obj.id,
+                            'name': target_obj.name,
+                            'category': target_obj.category,
+                            'intensity': target_obj.intensity,
+                            'resonance': round(min(resonance, 99.8), 1),
+                            'reason': item.get('reason', 'Molecular Affinity Match')
+                        })
+                
+                if enriched:
+                    # SUCCESS: Resonance established
+                    return JsonResponse({'status': 'success', 'suggestions': enriched})
+            
+            # Incrementally improve prompt if we failed
+            retry_note = "Your last synthesis signal was unparseable or used invalid nomenclature. Please adhere strictly to the JSON array format using the Inventory Registry's exact names."
 
-        # Final Fallback: If all 3 attempts failed to produce cards, return raw text
+        # Final Fallback: If all attempts failed to produce cards
+        if not raw_suggestion or not raw_suggestion.strip():
+            raw_suggestion = "System Failure: The Laboratory substrate returned an empty synthesis signal. Please try again."
+            
         return JsonResponse({'status': 'success', 'suggestion': raw_suggestion})
     except Exception as e:
         traceback.print_exc()

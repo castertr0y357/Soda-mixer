@@ -36,6 +36,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'soda_mixer.flavors.middleware.LaboratoryAccessMiddleware',
 ]
 
 ROOT_URLCONF = 'soda_mixer.urls'
@@ -101,3 +102,8 @@ STATICFILES_DIRS = [BASE_DIR / 'soda_mixer' / 'static']
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Authentication Protocol Configuration
+LOGIN_URL = 'login'
+LOGIN_REDIRECT_URL = 'home'
+LOGOUT_REDIRECT_URL = 'login'

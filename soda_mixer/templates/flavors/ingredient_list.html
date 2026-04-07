@@ -23,27 +23,27 @@
 {% block content %}
 <div class="glass-surface p-4 mb-4 d-flex justify-content-between align-items-center border-lab">
     <div>
-        <h2 class="mb-0 text-white">MATERIEL <span class="text-gradient-lab">INVENTORY</span></h2>
+        <h2 class="mb-0 text-white">REAGENT <span class="text-gradient-lab">REGISTRY</span></h2>
         <p class="text-dim mb-0">Baseline components available for synthesis and extraction.</p>
     </div>
     <div class="d-flex align-items-center gap-3">
-        <div class="d-none d-md-block text-dim small">
-            <i class="bi bi-flask"></i> {{ ingredients.count }} Registered Materials
+        <div class="d-none d-md-block text-dim small bg-white bg-opacity-5 px-3 py-1 rounded border border-white border-opacity-10">
+            <span class="status-dot dot-accent me-1" style="width:6px; height:6px;"></span> Registry Online: {{ ingredients.count }}
         </div>
         {% if user.is_staff %}
-        <button class="btn btn-sm btn-outline-primary border-white border-opacity-10 text-white" data-bs-toggle="modal"
+        <button class="btn btn-sm btn-accent px-3 py-1 fw-bold" data-bs-toggle="modal"
             data-bs-target="#addIngredientModal">
-            <i class="bi bi-plus-lg"></i> Add
+            <i class="bi bi-plus-lg me-1"></i> ADD MATERIAL
         </button>
         <button class="btn btn-sm btn-outline-warning border-white border-opacity-10 text-white" data-bs-toggle="modal"
             data-bs-target="#manageCategoriesModal">
-            <i class="bi bi-tags"></i> Categories
+            <i class="bi bi-tags"></i>
         </button>
         {% else %}
         <a href="{% url 'admin:login' %}?next={{ request.path }}"
             class="btn btn-sm btn-outline-secondary border-white border-opacity-10 text-dim"
             title="Login as staff to manage inventory">
-            <i class="bi bi-lock"></i> Staff Login
+            <i class="bi bi-lock me-1"></i> STAFF
         </a>
         {% endif %}
     </div>
@@ -79,13 +79,18 @@
                 </div>
             </div>
 
-            <div class="mb-3 d-flex align-items-center gap-2">
-                <div class="text-warning d-flex gap-1 lab-rating" data-intensity="{{ ingredient.intensity }}">
-                    {% for i in "12345" %}
-                    <i class="bi {% if forloop.counter <= ingredient.intensity %}bi-star-fill active{% else %}bi-star{% endif %}"></i>
-                    {% endfor %}
+            <div class="mb-4">
+                <div class="d-flex justify-content-between align-items-end mb-1">
+                    <span class="readout-label" style="font-size: 0.55rem;">FLAVOR INTENSITY</span>
+                    <span class="text-dim fw-bold" style="font-size: 0.65rem;">LVL {{ ingredient.intensity }}/5</span>
                 </div>
-                <span class="text-dim small" style="font-size: 0.7rem; letter-spacing: 0.05em;">LVL {{ ingredient.intensity }}</span>
+                <div class="progress bg-white bg-opacity-5" style="height: 4px; overflow: visible;">
+                    <div class="progress-bar bg-{{ ingredient.category }} shadow-glow" role="progressbar" 
+                         style="width: {% widthratio ingredient.intensity 5 100 %}%; border-radius: 4px; position: relative;">
+                         <div class="position-absolute end-0 top-50 translate-middle-y rounded-circle bg-white" 
+                              style="width: 8px; height: 8px; box-shadow: 0 0 8px var(--lab-accent);"></div>
+                    </div>
+                </div>
             </div>
 
             {% if ingredient.ingredient_type == 'COFFEE_BEAN' %}

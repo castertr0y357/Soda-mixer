@@ -9,6 +9,18 @@
         <h1 class="display-3 fw-bold text-white mb-2">BEVERAGE <span class="text-gradient-lab">LABORATORY</span></h1>
         <p class="text-muted fs-5">Advanced synthesis for the modern household scientist.</p>
         
+        <!-- Global Feedback Substrate -->
+        {% if messages %}
+        <div class="container mt-3" style="max-width: 600px;">
+            {% for message in messages %}
+            <div class="alert bg-{{ message.tags|default:'info' }} bg-opacity-10 border border-{{ message.tags|default:'info' }} border-opacity-20 text-{{ message.tags|default:'info' }} small py-2 alert-dismissible fade show" role="alert">
+                <i class="bi bi-info-circle me-2"></i> {{ message }}
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert" aria-label="Close" style="font-size: 0.5rem;"></button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        
             <div class="d-flex justify-content-center gap-2 mt-4">
                 <button type="button" id="modeSoda" class="btn btn-lg btn-glass-toggle px-4 active" onclick="setLabMode('SODA')">
                     <i class="bi bi-water"></i> Soda Lab
@@ -53,7 +65,17 @@
                 <input type="hidden" name="drink_type" id="drinkTypeField" value="SODA">
                 
                 <div class="mb-4" id="selectedArea" style="display: none;">
-                    <label class="readout-label mb-2">Current Compound</label>
+                    <div class="d-flex justify-content-between align-items-end mb-2">
+                        <label class="readout-label mb-0">Current Compound</label>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-xs btn-outline-info opacity-75 hover-opacity-100" onclick="stepBack()">
+                                <i class="bi bi-arrow-left"></i> STEP BACK
+                            </button>
+                            <button type="button" class="btn btn-xs btn-outline-danger opacity-75 hover-opacity-100" onclick="resetMixer()">
+                                <i class="bi bi-trash3"></i> HARD RESET
+                            </button>
+                        </div>
+                    </div>
                     <div class="d-flex flex-wrap gap-3" id="selectedIngredientsList"></div>
                     
                     {% if recipes %}
@@ -67,9 +89,6 @@
                 <div id="stepContainer" class="p-4 rounded-4 bg-dark bg-opacity-25 border border-white border-opacity-5">
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <h5 class="fw-bold mb-0 text-gradient-lab" id="stepTitle">Step 1: Select Base Component</h5>
-                        <button type="button" class="btn btn-sm btn-outline-secondary border-0" id="resetBtn" style="display: none;" onclick="resetMixer()">
-                            <i class="bi bi-arrow-counterclockwise"></i> Reset Lab
-                        </button>
                     </div>
                     
                     <div class="row g-3" id="availableIngredients">
@@ -109,9 +128,9 @@
                             </div>
                         </div>
                         <div class="col-md-5">
-                            <button type="button" class="btn btn-primary w-100 py-3" onclick="interceptAndSave()">
-                                <i class="bi bi-journal-plus"></i> Index into Notebook
-                            </button>
+                                <button type="button" class="btn btn-accent btn-lg w-100 py-3 fw-black shadow-lg" id="saveMixBtn" onclick="interceptAndSave()">
+                                    <i class="bi bi-journal-plus me-2"></i> ARCHIVE SYNTHESIS
+                                </button>
                         </div>
                     </div>
                     <p class="text-dim small mt-2 d-flex align-items-center gap-2">
@@ -123,6 +142,15 @@
     </div>
     
     <div class="col-lg-4">
+        <div class="glass-surface p-4 h-100 mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h4 class="mb-0"><i class="bi bi-box-seam me-2 text-primary"></i>Inventory</h4>
+                <div class="small text-dim bg-white bg-opacity-5 px-2 py-1 rounded small border border-white border-opacity-10">
+                    <span class="status-dot dot-accent me-1" style="width:6px; height:6px;"></span> Registry Online: {{ ingredients|length }}
+                </div>
+            </div>
+        </div>
+
         <!-- AI Assistant Interface (Permanent Console) -->
         <div id="ai-chat-panel" class="glass-surface border-lab mb-4 active" style="position: static; width: 100%; height: 500px; display: flex; flex-direction: column;">
             <div class="ai-chat-header px-3 py-2 border-bottom border-white border-opacity-10">
@@ -188,8 +216,10 @@
     </div>
 </div>
 
-<!-- AI Interface relocated to sidebar grid -->
-
+<style>
+    .resonance-glow { box-shadow: 0 0 10px rgba(var(--lab-accent-rgb), 0.3); }
+    .dot-accent { background-color: var(--lab-accent); border-radius: 50%; display: inline-block; }
+</style>
 
 <script>
     let currentLabMode = 'SODA';
@@ -342,7 +372,6 @@
 
     function selectIngredient(id, name, intensity, category) {
         selectedIngredients.push({id: id, name: name, intensity: parseInt(intensity), category: category});
-        document.getElementById('resetBtn').style.display = 'block';
         updateSelectedArea();
         fetchRecommendations();
 
@@ -384,13 +413,23 @@
                 appendChatMessage('assistant', html);
                 aiChatHistory.push({role: 'assistant', content: data.summary});
             } else {
-                appendChatMessage('assistant', "Laboratory Error: " + (data.error || 'Synthesis report failed.'));
+                appendChatMessage('assistant', `
+                    <div>Laboratory Error: ${data.error || 'Synthesis report failed.'}</div>
+                    <button class="btn btn-xs btn-outline-warning mt-2 w-100" onclick="triggerFlavorSynthesis()">
+                        <i class="bi bi-arrow-clockwise"></i> Retry Synthesis Report
+                    </button>
+                `);
             }
         } catch (err) {
             warming.style.display = 'none';
             const thinking = document.querySelector('.msg-thinking');
             if (thinking) thinking.remove();
-            appendChatMessage('assistant', "Connectivity Error: Could not reach the synthesis substrate.");
+            appendChatMessage('assistant', `
+                <div>Connectivity Error: Could not reach the synthesis substrate.</div>
+                <button class="btn btn-xs btn-outline-warning mt-2 w-100" onclick="triggerFlavorSynthesis()">
+                    <i class="bi bi-arrow-clockwise"></i> Retry Synthesis Report
+                </button>
+            `);
         }
     }
 
@@ -408,10 +447,38 @@
 
     function resetMixer() {
         selectedIngredients = [];
+        aiChatHistory = []; // Clear assistant context on hard reset
         document.getElementById('stepContainer').style.display = 'block';
-        document.getElementById('resetBtn').style.display = 'none';
         document.getElementById('stepTitle').textContent = 'Step 1: Select Base Component';
         updateSelectedArea();
+        
+        // Reset the ingredient deck to step 1
+        fetchRecommendations();
+        
+        // Clear chat body to a neutral state
+        document.getElementById('aiChatBody').innerHTML = `
+            <div class="chat-msg msg-assistant">
+                Compound cleared. Laboratory state normalized. I am ready for a new synthesis.
+            </div>
+        `;
+    }
+
+    function stepBack() {
+        if (selectedIngredients.length === 0) return;
+        
+        selectedIngredients.pop();
+        aiChatHistory.pop(); // Revert last assistant message
+        
+        document.getElementById('stepContainer').style.display = 'block';
+        updateSelectedArea();
+        fetchRecommendations();
+        
+        if (selectedIngredients.length > 0) {
+            triggerProactiveSuggestion();
+        } else {
+            // Revert to initial state if everything is gone
+            resetMixer();
+        }
     }
 
     function fetchRecommendations() {
@@ -423,7 +490,15 @@
             return;
         }
 
-        const stepText = ingredientIds.length === 1 ? 'Step 2: Select Complementary Payload' : 'Step 3: Select Stabilizer (Optional)';
+        let stepText = '';
+        if (ingredientIds.length === 0) {
+            stepText = 'Step 1: Select Base Component';
+        } else if (ingredientIds.length === 1) {
+            stepText = 'Step 2: Select Complementary Payload';
+        } else {
+            stepText = 'Step 3: Select Stabilizer (Optional)';
+        }
+        
         document.getElementById('stepTitle').textContent = stepText;
         document.getElementById('availableIngredients').innerHTML = '<div class="col-12 text-center py-4"><div class="spinner-border text-gradient-lab" role="status"></div><p class="mt-2 text-dim">Computing molecular affinity...</p></div>';
 
@@ -619,12 +694,28 @@
             }))
         };
 
+        document.getElementById('mixSummaryText').innerText = "Initiating laboratory archival process...";
+        const saveBtn = document.getElementById('saveMixBtn');
+        saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> ARCHIVING...';
+        saveBtn.disabled = true;
+        
         fetch('/api/history/save/', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
             body: JSON.stringify(data)
         })
-        .finally(() => {
+        .then(r => r.json())
+        .then(res => {
+            if (res.status === 'saved') {
+                document.getElementById('mixerForm').submit();
+            } else {
+                alert('Archive failure: ' + (res.error || 'Unknown error'));
+                saveBtn.innerHTML = 'ARCHIVE SYNTHESIS';
+                saveBtn.disabled = false;
+            }
+        })
+        .catch(err => {
+            console.error(err);
             document.getElementById('mixerForm').submit();
         });
     }
@@ -632,16 +723,23 @@
     // AI Assistant Logic (Globally Initialized)
     let aiChatHistory = [];
     
+    let lastUserMessage = '';
+
     document.getElementById('aiChatForm').addEventListener('submit', function(e) {
         e.preventDefault();
         const input = document.getElementById('aiInput');
-        const userInput = input.value.trim();
+        const userInput = input.value.trim() || lastUserMessage;
         if (!userInput) return;
 
+        lastUserMessage = userInput;
         appendChatMessage('user', userInput);
         appendChatMessage('assistant', "Consulting Laboratory Substrate...", 'thinking');
         input.value = '';
 
+        triggerAiChat(userInput);
+    });
+
+    async function triggerAiChat(userInput) {
         const payload = {
             message: userInput,
             history: aiChatHistory,
@@ -651,36 +749,52 @@
         const warming = document.getElementById('aiWarming');
         warming.style.display = 'block';
 
-        fetch('/api/ai/chat/', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
-            body: JSON.stringify(payload)
-        })
-        .then(r => r.json())
-        .then(data => {
+        try {
+            const r = await fetch('/api/ai/chat/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+                body: JSON.stringify(payload)
+            });
+            const data = await r.json();
+            
             warming.style.display = 'none';
             const thinking = document.querySelector('.msg-thinking');
             if (thinking) thinking.remove();
 
             if (data.status === 'success') {
                 appendChatMessage('assistant', data.suggestion);
+                // Only push to history on successful exchange
                 aiChatHistory.push({role: 'user', content: userInput});
                 aiChatHistory.push({role: 'assistant', content: data.suggestion});
                 if (aiChatHistory.length > 20) aiChatHistory.splice(0, 2);
                 updateAIStatus('warm');
             } else {
-                appendChatMessage('assistant', "Laboratory Error: " + data.error);
+                appendChatMessage('assistant', `
+                    <div class="pe-3">
+                        <div class="small fw-bold text-warning mb-1"><i class="bi bi-shield-exclamation"></i> TRANSMISSION INTERRUPTED</div>
+                        <div class="opacity-75 small">${data.error || "Substrate synchronization failed."}</div>
+                        <button class="btn btn-xs btn-accent mt-2 w-100 py-1" onclick="this.parentElement.parentElement.remove(); triggerAiChat('${userInput.replace(/'/g, "\\'")}')">
+                            <i class="bi bi-arrow-repeat me-1"></i> RE-ESTABLISH SIGNAL
+                        </button>
+                    </div>
+                `, 'msg-error');
                 updateAIStatus('dormant');
             }
-        })
-        .catch(err => {
+        } catch (err) {
             warming.style.display = 'none';
             const thinking = document.querySelector('.msg-thinking');
             if (thinking) thinking.remove();
-            appendChatMessage('assistant', "Connectivity Error: Failed to reach the assistant substrate.");
+            appendChatMessage('assistant', `
+                <div class="pe-3">
+                    <div class="small fw-bold text-warning mb-1"><i class="bi bi-wifi-off"></i> TOTAL SIGNAL LOSS</div>
+                    <button class="btn btn-xs btn-accent mt-2 w-100 py-1" onclick="this.parentElement.parentElement.remove(); triggerAiChat('${userInput.replace(/'/g, "\\'")}')">
+                        <i class="bi bi-arrow-repeat me-1"></i> RE-REGENERATE LINK
+                    </button>
+                </div>
+            `, 'msg-error');
             updateAIStatus('dormant');
-        });
-    });
+        }
+    }
 
     function appendChatMessage(role, text, extraClass = '') {
         const body = document.getElementById('aiChatBody');
@@ -701,15 +815,17 @@
     let suggestTimeout;
     let currentSuggestions = []; // Tracking for "More Options" exclusion
 
-    async function triggerProactiveSuggestion(isMore = false) {
+    async function triggerProactiveSuggestion(isMore = false, isRegenerate = false) {
         // Only block automatic suggestions if the proactive toggle is off.
-        // Explicit user clicks (isMore=true) always proceed.
-        if (!isMore && !document.getElementById('aiProactiveToggle').checked) return;
+        // Explicit user clicks (isMore=true or isRegenerate=true) always proceed.
+        if (!isMore && !isRegenerate && !document.getElementById('aiProactiveToggle').checked) return;
         if (selectedIngredients.length === 0) return;
 
         clearTimeout(suggestTimeout);
         suggestTimeout = setTimeout(async () => {
             appendChatMessage('assistant', "Analyzing reagents...", 'thinking');
+
+            if (isRegenerate) currentSuggestions = [];
 
             const payload = {
                 ingredients: selectedIngredients.map(i => i.name),
@@ -734,16 +850,25 @@
 
                 if (data.status === 'success') {
                     if (data.suggestions && data.suggestions.length > 0) {
-                        currentSuggestions = data.suggestions.map(s => s.name);
+                        currentSuggestions = [...new Set([...currentSuggestions, ...data.suggestions.map(s => s.name)])];
                         
-                        let html = `<div class="suggestion-header mb-2 small text-dim uppercase">Molecular Affinity Matches</div>`;
+                        let html = `
+                            <div class="suggestion-header mb-2 d-flex justify-content-between align-items-center">
+                                <span class="small text-dim uppercase">Molecular Affinity Matches</span>
+                                <button class="btn btn-link btn-xs text-dim p-0 hover-accent" onclick="triggerProactiveSuggestion(false, true)" title="Regenerate Resonance">
+                                    <i class="bi bi-arrow-clockwise"></i>
+                                </button>
+                            </div>`;
                         data.suggestions.forEach(s => {
                             html += `
                                 <div class="glass-card p-2 mb-2 border-accent border-opacity-25 hover-glow cursor-pointer transition-all" 
                                      onclick="selectIngredient(${s.id}, '${s.name.replace(/'/g, "\\'")}', ${s.intensity}, '${s.category}')">
                                     <div class="d-flex justify-content-between align-items-center">
                                         <span class="fw-bold text-accent">${s.name}</span>
-                                        <span class="badge-fizz bg-${s.category} py-0 px-1" style="font-size:0.6rem;">${s.category}</span>
+                                        <div class="d-flex gap-1 align-items-center">
+                                            <span class="text-info fw-black me-2" style="font-size: 0.65rem; text-shadow: 0 0 8px var(--fizz-cyan);">🧪 ${s.resonance}%</span>
+                                            <span class="badge-fizz bg-${s.category} py-0 px-1" style="font-size:0.6rem;">${s.category}</span>
+                                        </div>
                                     </div>
                                     <div class="small text-white opacity-75 mt-1" style="font-size:0.75rem; line-height:1.2;">
                                         ${s.reason}
@@ -758,18 +883,31 @@
                                 <i class="bi bi-arrow-repeat me-1"></i> SYNTHESIZE PRECISE ALTERNATIVES
                             </button>
                         `;
-                        
                         appendChatMessage('assistant', html);
                         aiChatHistory.push({role: 'assistant', content: "[Structured Suggestions Provided]"});
                     } else {
-                        appendChatMessage('assistant', data.suggestion);
+                        // Handle raw suggestion (prose fallback)
+                        appendChatMessage('assistant', data.suggestion || "Molecular signal lost.");
                         aiChatHistory.push({role: 'assistant', content: data.suggestion});
                     }
+                } else {
+                    appendChatMessage('assistant', `
+                        <div>Laboratory Error: ${data.error || "Synthesis interrupted."}</div>
+                        <button class="btn btn-xs btn-outline-warning mt-2 w-100" onclick="triggerProactiveSuggestion(true)">
+                            <i class="bi bi-arrow-clockwise"></i> Retry Discovery
+                        </button>
+                    `);
                 }
             } catch (err) {
                 warming.style.display = 'none';
                 const thinking = document.querySelector('.msg-thinking');
                 if (thinking) thinking.remove();
+                appendChatMessage('assistant', `
+                    <div>System Failure: Laboratory substrate unresponsive.</div>
+                    <button class="btn btn-xs btn-outline-warning mt-2 w-100" onclick="triggerProactiveSuggestion(true)">
+                        <i class="bi bi-arrow-clockwise"></i> Retry Discovery
+                    </button>
+                `);
             }
         }, isMore ? 100 : 1500); 
     }

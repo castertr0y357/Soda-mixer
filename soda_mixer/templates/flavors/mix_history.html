@@ -10,8 +10,8 @@
             <h2 class="mb-0 text-white">HISTORICAL <span class="text-gradient-lab">ARCHIVES</span></h2>
             <p class="text-dim mb-0">Chronological log of all experimental synthesis and extraction events.</p>
         </div>
-        <a href="{% url 'home' %}" class="btn btn-primary px-4 py-2">
-            <i class="bi bi-plus-circle me-2"></i> New Experiment
+        <a href="{% url 'home' %}" class="btn btn-accent px-4 py-2 fw-black shadow-lg">
+            <i class="bi bi-plus-circle me-2"></i> Initiate New Protocol
         </a>
     </div>
 </div>
@@ -20,12 +20,12 @@
 <div class="row g-3">
     {% for mix in history %}
     <div class="col-12">
-        <div class="glass-card p-4 {% if mix.promoted_recipe %}border-success border-opacity-25{% else %}border-white border-opacity-10{% endif %}">
+        <div class="glass-card p-4 transition-all {% if mix.promoted_recipe %}resonance-fringe border-success border-opacity-25{% else %}border-white border-opacity-10{% endif %}">
             <div class="row align-items-center">
                 <div class="col-md-9">
                     <div class="d-flex align-items-center gap-3 mb-3 flex-wrap">
-                        <div class="readout-label text-dim">
-                            <i class="bi bi-clock me-1"></i> {{ mix.mixed_at|date:"M d, Y H:i" }}
+                        <div class="readout-label text-dim bg-white bg-opacity-5 px-2 py-1 rounded border border-white border-opacity-10">
+                            <i class="bi bi-clock me-1 text-accent"></i> {{ mix.mixed_at|date:"M d, Y" }} <span class="opacity-50 ms-1">{{ mix.mixed_at|date:"H:i" }}</span>
                         </div>
                         <span class="badge border border-white border-opacity-10 text-dim" style="font-size: 0.6rem;">{{ mix.get_drink_type_display }}</span>
                         {% if mix.promoted_recipe %}
@@ -41,7 +41,10 @@
                             <label class="readout-label mb-1" style="font-size: 0.55rem; color: var(--fizz-lime);">
                                 {% if forloop.first %}PRIMARY{% elif forloop.counter == 2 %}SECONDARY{% else %}MODIFIER{% endif %}
                             </label>
-                            <div class="fw-bold text-white small">{{ mi.ingredient.name }}</div>
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <div class="fw-bold text-white small">{{ mi.ingredient.name|default:"Signal Unidentified" }}</div>
+                                <span class="badge-fizz bg-{{ mi.ingredient.category }} py-0 px-1" style="font-size: 0.55rem;">{{ mi.ingredient.category }}</span>
+                            </div>
                             <div class="text-dim small" style="font-size: 0.65rem;">{{ mi.amount|floatformat:1 }} {% if mix.drink_type == 'SODA' %}ml{% else %}g{% endif %}</div>
                         </div>
                         {% endfor %}
@@ -51,11 +54,13 @@
                 <div class="col-md-3 mt-3 mt-md-0 text-md-end">
                     {% if mix.promoted_recipe %}
                     <a href="{% url 'recipe_detail' mix.promoted_recipe.id %}" class="btn btn-sm btn-outline-success border-0 px-3">
-                        <i class="bi bi-eye me-1"></i> View Formula
+                        <i class="bi bi-kanban me-1"></i> Inspect Protocol
                     </a>
                     {% else %}
-                    <button class="btn btn-primary btn-sm px-4" onclick="openPromoteModal({{ mix.id }}, [{% for mi in mix.mix_ingredients.all %}{{ mi.ingredient.id }}{% if not forloop.last %},{% endif %}{% endfor %}])">
-                        <i class="bi bi-journal-plus me-1"></i> Index Index
+                    <button class="btn btn-primary btn-sm px-4 promote-btn" 
+                            data-mix-id="{{ mix.id }}" 
+                            data-ingredients="[{% for mi in mix.mix_ingredients.all %}{{ mi.ingredient.id }}{% if not forloop.last %},{% endif %}{% endfor %}]">
+                        <i class="bi bi-journal-plus me-1"></i> Index Protocol
                     </button>
                     {% endif %}
                 </div>
@@ -65,10 +70,15 @@
     {% endfor %}
 </div>
 {% else %}
-<div class="col-12 text-center py-5">
-    <i class="bi bi-clock-history display-4 text-muted mb-3 d-block"></i>
-    <p class="text-muted">No records available. Begin experimental synthesis to populate archives.</p>
-    <a href="{% url 'home' %}" class="btn btn-primary px-4">Start Experiment</a>
+<div class="col-12 text-center py-5 glass-card border-dashed">
+    <div class="py-5">
+        <i class="bi bi-clock-history display-4 text-dim mb-4 d-block opacity-25"></i>
+        <h4 class="text-white mb-2">Historical Ledger is Empty</h4>
+        <p class="text-dim mb-4">No chronological records detected. Initiate an experimental synthesis to populate the archives.</p>
+        <a href="{% url 'home' %}" class="btn btn-accent px-5 py-2 fw-black">
+            <i class="bi bi-flask me-1"></i> Initiate Synthesis Protocol
+        </a>
+    </div>
 </div>
 {% endif %}
 
@@ -142,6 +152,16 @@
 {% block extra_js %}
 <script>
 let promoteIngredients = [];
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.promote-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const mixId = this.getAttribute('data-mix-id');
+            const ingredients = JSON.parse(this.getAttribute('data-ingredients'));
+            openPromoteModal(mixId, ingredients);
+        });
+    });
+});
 
 function openPromoteModal(mixId, ingredientIds) {
     promoteIngredients = ingredientIds;

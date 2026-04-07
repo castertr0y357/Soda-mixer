@@ -24,7 +24,9 @@
     
     --text-primary: hsl(0, 0%, 98%);
     --text-muted: hsl(225, 20%, 90%);
-    --text-dim: hsl(225, 15%, 80%);
+    --text-dim: hsl(225, 15%, 70%);
+    
+    --lab-accent-rgb: 164, 230, 76; /* Default Lime RGB for opacity usage */
 
     /* Defaults - Soda Theme */
     --lab-accent: var(--fizz-lime);
@@ -57,7 +59,26 @@ body {
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
     transition: background 1s ease;
+    animation: neuralFadeIn 0.8s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+@keyframes neuralFadeIn {
+    from { opacity: 0; transform: translateY(10px); filter: blur(10px); }
+    to { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+
+/* 🧬 Laboratory Custom Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-deep); }
+::-webkit-scrollbar-thumb { 
+    background: var(--glass-border); 
+    border-radius: 10px;
+    border: 1px solid transparent;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--lab-accent); box-shadow: 0 0 10px var(--lab-accent-glow); }
+
+/* Firefox */
+* { scrollbar-width: thin; scrollbar-color: var(--glass-border) var(--bg-deep); }
 
 /* Glassmorphism Classes */
 .glass-surface {
@@ -96,7 +117,41 @@ h1, h2, h3, h4, h5, h6 {
     -webkit-text-fill-color: transparent;
 }
 
-/* Mode Selectors */
+/* Mode Selectors & Buttons */
+.btn-accent {
+    background: var(--lab-gradient);
+    border: none;
+    color: var(--bg-deep) !important;
+    font-weight: 800;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    box-shadow: 0 0 15px var(--lab-accent-glow);
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-accent:hover {
+    transform: scale(1.02) translateY(-1px);
+    box-shadow: 0 0 25px var(--lab-accent-glow);
+    filter: brightness(1.1);
+}
+
+.btn-accent:active { transform: scale(0.98); }
+
+.glow-pulse {
+    animation: glowPulse 2s infinite ease-in-out;
+}
+
+@keyframes glowPulse {
+    0%, 100% { box-shadow: 0 0 5px var(--lab-accent-glow); }
+    50% { box-shadow: 0 0 15px var(--lab-accent-glow); }
+}
+
+.resonance-fringe {
+    border-left: 3px solid var(--lab-accent) !important;
+    background: linear-gradient(90deg, var(--lab-accent-glow) 0%, transparent 100%) !important;
+}
+
 .btn-glass-toggle {
     background: rgba(255, 255, 255, 0.08);
     border: 2px solid rgba(255, 255, 255, 0.2);
@@ -242,6 +297,19 @@ h1, h2, h3, h4, h5, h6 {
     color: white;
     border-color: transparent;
     box-shadow: 0 0 12px var(--experimental-glow);
+}
+
+/* Sub-compact utility buttons — used for undo/reset */
+.btn-xs {
+    padding: 0.15rem 0.4rem;
+    font-size: 0.55rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    border-radius: 4px;
+}
+
+.hover-opacity-100:hover {
+    opacity: 1 !important;
 }
 
 /* Hall of Fame Readouts */
