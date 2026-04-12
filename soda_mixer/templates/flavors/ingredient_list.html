@@ -86,7 +86,7 @@
                 </div>
                 <div class="progress bg-white bg-opacity-5" style="height: 4px; overflow: visible;">
                     <div class="progress-bar bg-{{ ingredient.category }} shadow-glow" role="progressbar" 
-                         style="width: {% widthratio ingredient.intensity 5 100 %}%; border-radius: 4px; position: relative;">
+                         style="--p-width: {% widthratio ingredient.intensity 5 100 %}%; width: var(--p-width); border-radius: 4px; position: relative;">
                          <div class="position-absolute end-0 top-50 translate-middle-y rounded-circle bg-white" 
                               style="width: 8px; height: 8px; box-shadow: 0 0 8px var(--lab-accent);"></div>
                     </div>
@@ -170,7 +170,7 @@
                     <label class="form-label text-white fw-bold small">Compound Name</label>
                     <div class="input-group">
                         <input type="text" name="name" id="addName" class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10" required>
-                        <button class="btn btn-outline-experimental" type="button" onclick="synthesizeProfile('add')">
+                        <button class="btn btn-outline-experimental" type="button" onclick="synthesizeProfile('add', this)">
                             <i class="bi bi-magic"></i> <span class="d-none d-sm-inline">Synthesize</span>
                         </button>
                     </div>
@@ -528,7 +528,7 @@
         });
     });
 
-    async function synthesizeProfile(prefix) {
+    async function synthesizeProfile(prefix, btn) {
         const nameInput = document.getElementById(prefix + 'Name');
         const descInput = document.getElementById(prefix + 'Desc') || { value: '' };
         const name = nameInput.value.trim();
@@ -539,7 +539,6 @@
             return;
         }
 
-        const btn = event.currentTarget;
         const originalHtml = btn.innerHTML;
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Analyzing...';

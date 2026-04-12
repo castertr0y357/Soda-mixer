@@ -341,7 +341,7 @@ def create_recipe(request):
                     amount=amount,
                     notes=notes
                 )
-            except (ValueError, ValidationError):
+            except (ValueError, ValidationError, IntegrityError):
                 pass
 
         return redirect('recipe_detail', pk=recipe.pk)
@@ -398,7 +398,7 @@ def edit_recipe(request, pk):
                         amount=amount,
                         notes=notes
                     )
-                except (ValueError, TypeError, Ingredient.DoesNotExist):
+                except (ValueError, TypeError, Ingredient.DoesNotExist, IntegrityError):
                     continue
 
         return redirect('recipe_detail', pk=recipe.pk)
@@ -465,25 +465,27 @@ def import_data(request):
         ingredient_map = {} # old_id -> new_object
         for i_data in serializers.deserialize('json', raw_data['ingredients']):
             i = i_data.object
+            old_id = i.id
             existing = Ingredient.objects.filter(name=i.name).first()
             if existing:
-                ingredient_map[i_data.object.id] = existing
+                ingredient_map[old_id] = existing
             else:
                 i.id = None # Force new record
                 i.save()
-                ingredient_map[i_data.object.id] = i
+                ingredient_map[old_id] = i
 
         # 2. Restore Categories (Merge by Name)
         category_map = {}
         for c_data in serializers.deserialize('json', raw_data['categories']):
             c = c_data.object
+            old_id = c.id
             existing = RecipeCategory.objects.filter(name=c.name).first()
             if existing:
-                category_map[c_data.object.id] = existing
+                category_map[old_id] = existing
             else:
                 c.id = None
                 c.save()
-                category_map[c_data.object.id] = c
+                category_map[old_id] = c
 
         # 3. Restore Recipes
         recipe_map = {}
@@ -1217,5 +1219,52 @@ def ai_analyze_ingredient_api(request):
             return JsonResponse({'status': 'success', 'profile': profile})
         else:
             return JsonResponse({'error': 'Chemical analysis failed to yield structured data.'}, status=500)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def random_pairing_api(request):
+    """Generate a random 3-ingredient combination based on the current mode."""
+    try:
+        data = json.loads(request.body)
+        drink_type = data.get('drink_type', 'SODA')
+        
+        # 1. Get compatible ingredients in inventory
+        all_compatible = Ingredient.objects.filter(
+            is_in_inventory=True,
+            compatible_systems__contains=drink_type
+        )
+        
+        if all_compatible.count() < 3:
+             return JsonResponse({'error': 'Insufficient reagents in inventory for a random synthesis.'}, status=400)
+
+        # 2. Try to pick a base (Soda Syrup or Coffee Bean)
+        base_types = ['SODA_SYRUP', 'COFFEE_BEAN']
+        potential_bases = all_compatible.filter(ingredient_type__in=base_types)
+        
+        selection = []
+        if potential_bases.exists():
+            selection.append(random.choice(list(potential_bases)))
+        
+        # 3. Fill up to 3
+        remaining_reagents = list(all_compatible.exclude(id__in=[i.id for i in selection]))
+        random.shuffle(remaining_reagents)
+        
+        while len(selection) < 3 and remaining_reagents:
+            selection.append(remaining_reagents.pop())
+            
+        # 4. Format for response
+        result = []
+        for ing in selection:
+            result.append({
+                'id': ing.id,
+                'name': ing.name,
+                'category': ing.category,
+                'intensity': ing.intensity
+            })
+            
+        return JsonResponse({'status': 'success', 'ingredients': result})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)

@@ -50,6 +50,7 @@ urlpatterns = [
     path('api/ai/suggest/', views.ai_suggest_api, name='ai_suggest_api'),
     path('api/ai/synthesize/', views.ai_synthesize_api, name='ai_synthesize_api'),
     path('api/ai/analyze-ingredient/', views.ai_analyze_ingredient_api, name='ai_analyze_ingredient_api'),
+    path('api/random-pairing/', views.random_pairing_api, name='random_pairing_api'),
     
     # Auth
     path('login/', views.login_view, name='login'),

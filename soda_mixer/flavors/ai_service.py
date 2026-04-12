@@ -94,12 +94,12 @@ class AIAssistant:
             if provider.provider_type == 'OLLAMA':
                 base = (provider.base_url or "http://localhost:11434").rstrip('/')
                 model = provider.default_model or "mistral"
-                # /api/show returns model metadata instantly — no generation queued,
-                # no blocking, and it resets Ollama's internal idle timer.
+                # /api/generate with no prompt forces Ollama to seize VRAM 
+                # and hold the model memory-resident for the keep_alive duration.
                 response = requests.post(
-                    f"{base}/api/show",
-                    json={"name": model},
-                    timeout=10
+                    f"{base}/api/generate",
+                    json={"model": model, "keep_alive": "15m"},
+                    timeout=30
                 )
                 return response.status_code == 200
             else:
@@ -350,12 +350,18 @@ Do NOT give preparation instructions. Do NOT suggest more ingredients. No markdo
         model = provider.default_model or "gemini-1.5-flash"
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
         
+        system_text = messages[0]['content'] if messages and messages[0]['role'] == 'system' else ""
+        actual_messages = messages[1:] if system_text else messages
+        
         # Format messages for Gemini
         contents = []
-        for m in messages:
-            role = "user" if m['role'] in ['user', 'system'] else "model"
+        for m in actual_messages:
+            role = "user" if m['role'] == 'user' else "model"
             contents.append({"role": role, "parts": [{"text": m['content']}]})
             
         data = {"contents": contents}
+        if system_text:
+            data["system_instruction"] = {"parts": [{"text": system_text}]}
+            
         response = cls._safe_request('POST', url, json=data, timeout=30)
         return response.json()['candidates'][0]['content']['parts'][0]['text']

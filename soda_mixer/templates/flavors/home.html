@@ -87,8 +87,11 @@
                 </div>
                 
                 <div id="stepContainer" class="p-4 rounded-4 bg-dark bg-opacity-25 border border-white border-opacity-5">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-4 w-100">
                         <h5 class="fw-bold mb-0 text-gradient-lab" id="stepTitle">Step 1: Select Base Component</h5>
+                        <button type="button" class="btn btn-xs btn-outline-experimental" onclick="surpriseMe()" id="surpriseBtn">
+                            <i class="bi bi-dice-3 me-1"></i> SURPRISE ME
+                        </button>
                     </div>
                     
                     <div class="row g-3" id="availableIngredients">
@@ -371,6 +374,12 @@
     }
 
     function selectIngredient(id, name, intensity, category) {
+        // Prevent molecular duplication in a single mix
+        if (selectedIngredients.some(ing => ing.id == id)) {
+            appendChatMessage('assistant', `The reagent <strong>${name}</strong> is already integrated into the current compound.`);
+            return;
+        }
+
         selectedIngredients.push({id: id, name: name, intensity: parseInt(intensity), category: category});
         updateSelectedArea();
         fetchRecommendations();
@@ -380,6 +389,45 @@
             triggerFlavorSynthesis();
         } else {
             triggerProactiveSuggestion();
+        }
+    }
+
+    async function surpriseMe() {
+        const btn = document.getElementById('surpriseBtn');
+        const originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> SYNCING...';
+
+        try {
+            const response = await fetch('/api/random-pairing/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ drink_type: currentLabMode })
+            });
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                resetMixer();
+                data.ingredients.forEach(ing => {
+                    selectIngredient(ing.id, ing.name, ing.intensity, ing.category);
+                });
+                
+                // Immediately trigger synthesis report
+                if (selectedIngredients.length > 0) {
+                    triggerFlavorSynthesis();
+                }
+            } else {
+                alert(data.error || "Random synthesis failed.");
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Comms Failure: Could not reach substrate.");
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
         }
     }
 
@@ -528,8 +576,8 @@
                 
                 container.innerHTML += `
                     <div class="col-md-4 col-sm-6">
-                        <div class="glass-card p-3 h-100 d-flex flex-column align-items-center justify-content-center text-center cursor-pointer ${cardClass}"
-                                 onclick="selectIngredient(${rec.id}, '${rec.name.replace(/'/g, "\\'")}', ${rec.intensity}, '${rec.category}')">
+                        <div class="glass-card p-3 h-100 d-flex flex-column align-items-center justify-content-center text-center cursor-pointer select-ingredient-btn ${cardClass}"
+                             data-id="${rec.id}" data-name="${rec.name}" data-intensity="${rec.intensity}" data-category="${rec.category}">
                                 <span class="fw-bold fs-5 mb-1">${rec.name}</span>
                                 <span class="badge-fizz ${badgeClass} mb-2">${rec.category}</span>
                                 <div class="mt-auto">
@@ -802,7 +850,12 @@
         msgDiv.className = `chat-msg msg-${role} ${extraClass}`;
         msgDiv.innerHTML = text; // Upgrade to innerHTML for interactive elements
         body.appendChild(msgDiv);
-        body.scrollTop = body.scrollHeight;
+        
+        // Automated Scroll-Alignment with slight delay for layout rendering
+        setTimeout(() => {
+            body.scrollTop = body.scrollHeight;
+        }, 50);
+        
         return msgDiv;
     }
 
@@ -861,8 +914,8 @@
                             </div>`;
                         data.suggestions.forEach(s => {
                             html += `
-                                <div class="glass-card p-2 mb-2 border-accent border-opacity-25 hover-glow cursor-pointer transition-all" 
-                                     onclick="selectIngredient(${s.id}, '${s.name.replace(/'/g, "\\'")}', ${s.intensity}, '${s.category}')">
+                                <div class="glass-card p-2 mb-2 border-accent border-opacity-25 hover-glow cursor-pointer transition-all select-ingredient-btn" 
+                                     data-id="${s.id}" data-name="${s.name}" data-intensity="${s.intensity}" data-category="${s.category}">
                                     <div class="d-flex justify-content-between align-items-center">
                                         <span class="fw-bold text-accent">${s.name}</span>
                                         <div class="d-flex gap-1 align-items-center">

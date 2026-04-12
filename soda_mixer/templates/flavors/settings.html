@@ -230,14 +230,20 @@
                             <label class="readout-label mb-2 d-block">Default Model Target</label>
                             <div class="input-group">
                                 <span class="input-group-text bg-dark border-white border-opacity-10 text-experimental"><i class="bi bi-cpu"></i></span>
-                                <select id="pModel" class="form-select bg-dark border-white border-opacity-10 text-white" required>
+                                
+                                <!-- Dropdown for Ollama (Locked) -->
+                                <select id="pModelSelect" class="form-select bg-dark border-white border-opacity-10 text-white" style="display: none;">
                                     <option value="">Sync models to select...</option>
                                 </select>
+                                
+                                <!-- Text input for Cloud (Flexible) -->
+                                <input type="text" id="pModelInput" class="form-control bg-dark border-white border-opacity-10 text-white" placeholder="e.g. gpt-4o">
+
                                 <button class="btn btn-outline-experimental" type="button" id="btnFetchModels" onclick="fetchProviderModels()">
                                     <i class="bi bi-arrow-repeat me-1"></i> <span id="fetchLabel">Fetch Models</span>
                                 </button>
                             </div>
-                            <div class="form-text text-dim">Synchronize and select a validated model from the substrate.</div>
+                            <div class="form-text text-dim" id="modelHelpText">Specify the model identifier or synchronize with the substrate.</div>
                         </div>
                         
                         <div class="col-md-4 d-flex align-items-end gap-2">
@@ -390,8 +396,9 @@ function editProvider(id, name, type, key, url, model, enabled, isDefault) {
     document.getElementById('pKey').value = key;
     document.getElementById('pUrl').value = url;
     
-    // Pre-populate select with current model so it's not empty
-    const modelSelect = document.getElementById('pModel');
+    // Set both fields; toggleApiFields will show the right one
+    document.getElementById('pModelInput').value = model;
+    const modelSelect = document.getElementById('pModelSelect');
     modelSelect.innerHTML = `<option value="${model}" selected>${model}</option>`;
     
     document.getElementById('pEnabled').checked = enabled === true || enabled === 'true';
@@ -420,6 +427,10 @@ function toggleApiFields() {
     const type = document.getElementById('pType').value;
     const keyField = document.getElementById('apiKeyField');
     const urlField = document.getElementById('baseUrlField');
+    const modelInput = document.getElementById('pModelInput');
+    const modelSelect = document.getElementById('pModelSelect');
+    const modelHelpText = document.getElementById('modelHelpText');
+    const fetchBtn = document.getElementById('btnFetchModels');
     
     // Cloud needs key, Local needs URL
     if (['OLLAMA', 'OPENWEBUI', 'ANYTHINGLLM', 'CUSTOM'].includes(type)) {
@@ -427,17 +438,36 @@ function toggleApiFields() {
     } else {
         urlField.style.display = 'none';
     }
+
+    // Strict dropdown for Ollama, flexible text for others
+    if (type === 'OLLAMA') {
+        modelSelect.style.display = 'block';
+        modelInput.style.display = 'none';
+        modelHelpText.innerText = "Synchronize and select a validated model from your local Ollama registry.";
+        fetchBtn.style.display = 'block';
+    } else {
+        modelSelect.style.display = 'none';
+        modelInput.style.display = 'block';
+        modelHelpText.innerText = "Specify the exact model identifier (e.g. gpt-4o, claude-3-opus).";
+        // Hide fetch button for cloud providers unless they have discovery APIs (OpenAI/Gemini usually don't need it here)
+        fetchBtn.style.display = (type === 'CUSTOM' || type === 'OPENWEBUI') ? 'block' : 'none';
+    }
 }
 
 document.getElementById('providerForm').addEventListener('submit', function(e) {
     e.preventDefault();
+    const type = document.getElementById('pType').value;
+    const modelValue = (type === 'OLLAMA') 
+        ? document.getElementById('pModelSelect').value 
+        : document.getElementById('pModelInput').value;
+
     const payload = {
         id: document.getElementById('providerId').value,
         name: document.getElementById('pName').value,
-        provider_type: document.getElementById('pType').value,
+        provider_type: type,
         api_key: document.getElementById('pKey').value,
         base_url: document.getElementById('pUrl').value,
-        default_model: document.getElementById('pModel').value,
+        default_model: modelValue,
         is_enabled: document.getElementById('pEnabled').checked,
         set_default: document.getElementById('pDefault').checked
     };
@@ -477,8 +507,10 @@ async function fetchProviderModels() {
     const id = document.getElementById('providerId').value;
     const btn = document.getElementById('btnFetchModels');
     const label = document.getElementById('fetchLabel');
-    const modelSelect = document.getElementById('pModel');
-    const currentModel = modelSelect.value;
+    const modelSelect = document.getElementById('pModelSelect');
+    const modelInput = document.getElementById('pModelInput');
+    const type = document.getElementById('pType').value;
+    const currentModel = (type === 'OLLAMA') ? modelSelect.value : modelInput.value;
     
     const payload = {
         provider_type: document.getElementById('pType').value,
@@ -510,6 +542,11 @@ async function fetchProviderModels() {
                 if (m === currentModel) opt.selected = true;
                 modelSelect.appendChild(opt);
             });
+            
+            // If it's not Ollama, also update the input field for visual feedback
+            if (type !== 'OLLAMA' && data.models.length > 0) {
+                modelInput.value = data.models[0];
+            }
             
             label.innerText = 'Models Synced';
             btn.classList.replace('btn-outline-experimental', 'btn-success');
