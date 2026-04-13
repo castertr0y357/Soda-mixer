@@ -30,8 +30,24 @@ The application operates fundamentally split into three distinct laboratory envi
 - **Origin Analytics**: Logs coffee bean origin, roast level, and specific processing methods.
 
 ### ❄️ 3. Cryo-Slushie Lab
-- **Brix Optimization**: Advanced syntax processing specialized for the Ninja Slushi hardware.
 - **Liquid/Sugar Parity**: Real-time ratio monitors enforcing the strict 5:1 volumetric rule required to maintain frozen texture without freezing the auger.
+
+---
+
+## 🧠 AI Laboratory Assistant (Neural Mixology)
+
+The Laboratory now features a dedicated **Neural Substrate** that assists in advanced flavor discovery and synthesis reporting.
+
+### 📡 Multi-Substrate Support
+The Assistant is compatible with a wide range of LLM providers, configurable via the **Laboratory Settings Hub**:
+- **Cloud Providers**: OpenAI (GPT-4), Anthropic (Claude 3), Google (Gemini 1.5).
+- **Local Inferencing**: Native Ollama support (Mistral, Llama 3, etc.) and AnythingLLM integrations.
+- **VRAM Pre-Warming**: Automates a "Status Pulse" heartbeat that proactively loads local models into the GPU/VRAM on system load, ensuring zero-latency response times during active synthesis.
+
+### 🧪 Synthesis Protocols
+- **Molecular Affinity Matches**: The Assistant analyzes your current compound and proactively discovers matches based on chemical resonance and flavor science.
+- **"Surprise Me" (Random Pairing)**: Initiates an autonomous pairing protocol that constructs a viable 3-component formula based on the current laboratory mode.
+- **Synthesis Reports**: After every successful mix, the Assistant generates a 2-paragraph "Molecular Synergy Report," detailing the expected flavor body and chemical harmony of the result.
 
 ---
 
@@ -64,14 +80,15 @@ graph TD
         LabMod[Laboratory Mode Toggle] --> SODA[Soda Lab]
         LabMod --> COFF[Coffee Lab]
         LabMod --> CRYO[Cryo-Slushie Lab]
+        Console[AI Assistant Terminal]
         UI_Admin[Unified Django Admin]
-        Settings[Vertical Settings Hub]
     end
 
     subgraph Core [Django Backend Core]
         Ing[Ingredient Registry]
         Form[Formula Templates]
         Rec[Recipe Objects]
+        AI_Svc[AIAssistant Service]
         SysConf[SystemConfiguration Singleton]
         
         SODA --> Form
@@ -79,6 +96,7 @@ graph TD
         CRYO --> Form
         Form --> Rec
         Ing --> Rec
+        Rec --> AI_Svc
     end
 
     subgraph Data [Containerized Persistence]
@@ -88,11 +106,18 @@ graph TD
         SysConf --> DB
     end
     
+    subgraph Neural [AI Substrate Layer]
+        Ollama[Local: Ollama VRAM]
+        Cloud[Cloud: Gemini/OpenAI]
+        AI_Svc --> Ollama
+        AI_Svc --> Cloud
+    end
+
     subgraph External [External Endpoints]
         Mealie[Mealie Self-Hosted Instance]
         Export[JSON Archival Payload]
         
-        Settings --> Export
+        Settings[Settings Hub] --> Export
         Settings --> SysConf
         Rec -- "REST API Push" --> Mealie
     end
@@ -103,6 +128,7 @@ graph TD
 ## 🛠️ Laboratory Stack
 
 - **Framework**: Django 6.x (Python 3.12+)
+- **AI Engine**: Multi-LLM Orchestration (Ollama, Gemini, OpenAI, Claude)
 - **Database**: PostgreSQL 16 (Containerized)
 - **UI Engine**: Custom Carbonated Glass CSS (Vanilla & HSL-mapped)
 - **Networking**: `requests` for robust REST API dispatching
