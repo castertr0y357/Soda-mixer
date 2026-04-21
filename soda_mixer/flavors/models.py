@@ -72,6 +72,11 @@ class Ingredient(models.Model):
         validators=[MinValueValidator(1), MaxValueValidator(5)],
         default=1
     )
+    complexity = models.IntegerField(
+        help_text="Complexity of flavor profile from 1 (simple) to 5 (layered/deep)",
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+        default=3
+    )
     
     # Coffee-specific fields
     origin = models.CharField(max_length=100, blank=True, null=True)
@@ -181,6 +186,25 @@ class RecipeIngredient(models.Model):
         default=1.0
     )
     notes = models.CharField(max_length=200, blank=True)
+    
+    # 🧪 Synthesized Profile Overrides (optional AI fine-tuning)
+    intensity = models.IntegerField(null=True, blank=True, validators=[MinValueValidator(1), MaxValueValidator(5)])
+    sweetness = models.IntegerField(null=True, blank=True, validators=[MinValueValidator(1), MaxValueValidator(5)])
+    acidity = models.IntegerField(null=True, blank=True, validators=[MinValueValidator(1), MaxValueValidator(5)])
+    bitterness = models.IntegerField(null=True, blank=True, validators=[MinValueValidator(1), MaxValueValidator(5)])
+    complexity = models.IntegerField(null=True, blank=True, validators=[MinValueValidator(1), MaxValueValidator(5)])
+
+    @property
+    def effective_profile(self):
+        """Returns the synthesized override profile if available, otherwise defaults to base reagent stats."""
+        return {
+            'intensity': self.intensity if self.intensity is not None else (self.ingredient.intensity if self.ingredient else 3),
+            'sweetness': self.sweetness if self.sweetness is not None else (self.ingredient.sweetness if self.ingredient else 3),
+            'acidity': self.acidity if self.acidity is not None else (self.ingredient.acidity if self.ingredient else 3),
+            'bitterness': self.bitterness if self.bitterness is not None else (self.ingredient.bitterness if self.ingredient else 1),
+            'complexity': self.complexity if self.complexity is not None else (self.ingredient.complexity if self.ingredient else 3),
+            'is_synthesized': self.intensity is not None or self.sweetness is not None or self.acidity is not None or self.bitterness is not None or self.complexity is not None
+        }
 
     def __str__(self):
         if self.recipe.drink_type == 'COFFEE':
@@ -222,6 +246,25 @@ class MixHistoryIngredient(models.Model):
     mix = models.ForeignKey(MixHistory, on_delete=models.CASCADE, related_name='mix_ingredients')
     ingredient = models.ForeignKey(Ingredient, on_delete=models.SET_NULL, null=True, blank=True, related_name='mix_usage')
     amount = models.FloatField(default=1.0)
+    
+    # 🧪 Synthesized Profile Overrides (captured from AI suggestions)
+    intensity = models.IntegerField(null=True, blank=True, validators=[MinValueValidator(1), MaxValueValidator(5)])
+    sweetness = models.IntegerField(null=True, blank=True, validators=[MinValueValidator(1), MaxValueValidator(5)])
+    acidity = models.IntegerField(null=True, blank=True, validators=[MinValueValidator(1), MaxValueValidator(5)])
+    bitterness = models.IntegerField(null=True, blank=True, validators=[MinValueValidator(1), MaxValueValidator(5)])
+    complexity = models.IntegerField(null=True, blank=True, validators=[MinValueValidator(1), MaxValueValidator(5)])
+
+    @property
+    def effective_profile(self):
+        """Returns the synthesized override profile if available, otherwise defaults to base reagent stats."""
+        return {
+            'intensity': self.intensity if self.intensity is not None else (self.ingredient.intensity if self.ingredient else 3),
+            'sweetness': self.sweetness if self.sweetness is not None else (self.ingredient.sweetness if self.ingredient else 3),
+            'acidity': self.acidity if self.acidity is not None else (self.ingredient.acidity if self.ingredient else 3),
+            'bitterness': self.bitterness if self.bitterness is not None else (self.ingredient.bitterness if self.ingredient else 1),
+            'complexity': self.complexity if self.complexity is not None else (self.ingredient.complexity if self.ingredient else 3),
+            'is_synthesized': self.intensity is not None or self.sweetness is not None or self.acidity is not None or self.bitterness is not None or self.complexity is not None
+        }
 
     def __str__(self):
         ing_name = self.ingredient.name if self.ingredient else "Unknown Reagent"

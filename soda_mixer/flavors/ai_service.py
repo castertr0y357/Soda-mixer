@@ -17,8 +17,9 @@ class AIAssistant:
     - You use laboratory terminology (synthesis, compound, reagent, base, stabilizer).
     - You are a "Creative Mixologist"—you value bold, experimental pairings over 
       safe bets, but you always anchor them in flavor balance.
-    - You understand Sweetness, Acidity, Bitterness, and Intensity as the core axes 
+    - You understand Sweetness, Acidity, Bitterness, Intensity, and Complexity as the core axes 
       of a drink.
+    - Complexity measures the depth and "layers" of a flavor (1: simple/one-note, 5: deep/multi-layered).
 
     Context:
     - You have access to a user's current inventory and their high-rated recipes.
@@ -63,6 +64,14 @@ class AIAssistant:
             messages.extend(history)
         messages.append({"role": "user", "content": user_prompt})
 
+        # 🧪 AI SYNTHESIS REQUEST LOGGING
+        print("-" * 50)
+        print(f"🔬 BEVERAGE LABORATORY: Synthesis Request to {provider.name}")
+        print(f"   Model: {provider.default_model}")
+        print(f"   System Instructions: {len(system_content)} chars")
+        print(f"   Payload: {user_prompt[:250]}{'...' if len(user_prompt) > 250 else ''}")
+        print("-" * 50)
+
         try:
             if provider.provider_type == 'OPENAI':
                 return cls._call_openai(provider, messages)
@@ -78,6 +87,41 @@ class AIAssistant:
         except Exception as e:
             print(f"DEBUG: Laboratory AI Communication Failure ({provider.name}): {e}")
             return f"Laboratory Error: Failed to reach the assistant ({str(e)})."
+
+    @classmethod
+    def chat_stream(cls, user_prompt, history=None, provider=None, context=None):
+        if not provider:
+            provider = cls.get_default_provider()
+        
+        if not provider:
+            error_chunk = json.dumps({'chunk': "Error: No AI Laboratory Assistant is configured or enabled. Please check settings."})
+            yield f"data: {error_chunk}\n\n"
+            return
+
+        system_content = cls.SYSTEM_PROMPT
+        if context:
+            system_content += f"\n\nUSER'S LABORATORY INVENTORY REGISTRY:\n{context}"
+
+        messages = [{"role": "system", "content": system_content}]
+        if history:
+            messages.extend(history)
+        messages.append({"role": "user", "content": user_prompt})
+
+        try:
+            if provider.provider_type == 'OPENAI':
+                yield from cls._call_openai_stream(provider, messages)
+            elif provider.provider_type == 'CLAUDE':
+                yield from cls._call_claude_stream(provider, messages)
+            elif provider.provider_type == 'GEMINI':
+                yield from cls._call_gemini_stream(provider, messages)
+            elif provider.provider_type == 'OLLAMA':
+                yield from cls._call_ollama_stream(provider, messages)
+            else:
+                yield from cls._call_openai_stream(provider, messages)
+        except Exception as e:
+            print(f"DEBUG: Laboratory AI Communication Failure ({provider.name}): {e}")
+            error_chunk = json.dumps({'chunk': f"Laboratory Error: Failed to reach the assistant ({str(e)})."})
+            yield f"data: {error_chunk}\n\n"
 
     @classmethod
     def keep_warm(cls):
@@ -164,24 +208,68 @@ class AIAssistant:
         """
         tone = "safe and balanced" if mode == 'standard' else "bold and experimental"
         exclude_context = f" Exclude these previously suggested items: {', '.join(exclude)}." if exclude else ""
-        retry_context = f"\n\nRETRY NOTE: {retry_note}\n" if retry_note else ""
+        retry_context = f"\n\n[RETRY COMMAND]: {retry_note}\n" if retry_note else ""
         
-        prompt = f"""STRUCTURED DATA REQUEST — DO NOT RESPOND WITH PROSE IF DATA IS AVAILABLE.{retry_context}
+        prompt = f"""[STRUCTURED DATA REQUEST] — RAW JSON DATA ONLY. [NO PREAMBLE] [NO THINKING PROCESS].{retry_context}
 
 Current Compound: {', '.join(ingredients)}
-Mode: {tone}{exclude_context}
+Lab Mode: {tone}{exclude_context}
 
 Task: Identify EXACTLY 3 ingredients from the Inventory Registry below that pair well with the current compound.
 
 Rules:
-- USE THE EXACT NOMENCLATURE from the Inventory Registry.
-- Each item needs a short reason (max 8 words) grounded in flavor science.
-- Output MUST be a raw JSON array. No markdown, no backticks, no explanation before or after.
-- IF YOU CANNOT FIND 3 SUITABLE MATCHES according to flavor science, provide a brief (max 20 words) scientific explanation of the chemical conflict instead of JSON.
+1. USE THE EXACT NOMENCLATURE from the Inventory Registry.
+2. Each item needs a short reason (max 8 words) grounded in flavor science.
+3. MANDATORY: For each ingredient, synthesize a "Chemical Profile Overload" (intensity, sweetness, acidity, bitterness, complexity) on a scale of 1-5, specifically fine-tuned for this mix.
+4. OUTPUT MUST BE A RAW JSON ARRAY. [NO MARKDOWN] [NO BACKTICKS] [NO PREAMBLE] [NO EXPLANATION].
 
-Required format (copy this structure exactly if responding with JSON):
-[{{"name": "Exact Name from Registry", "reason": "Flavor science reason"}}, ...]"""
+EXACT FORMAT EXAMPLE (DO NOT COPY DATA, ONLY THE STRUCTURE):
+[{{ "name": "Lemon Syrup", "reason": "Acidity balances sweetness", "profile": {{ "intensity": 4, "sweetness": 2, "acidity": 5, "bitterness": 1, "complexity": 2 }} }}]
+
+Inventory Registry for Selection:
+"""
         return cls.chat(prompt, context=inventory)
+
+    @classmethod
+    def synthesize_surprise_mix(cls, inventory=None, mode='standard', drink_type='SODA'):
+        """
+        Autonomous Synthesis: Select a cohesive set of ingredients from the inventory.
+        Soda/Slushie: 3 ingredients.
+        Coffee: 3-5 ingredients, including a stabilizer.
+        """
+        tone = "safe and balanced" if mode == 'standard' else "bold and experimental"
+        drink_label = {'SODA': 'soda', 'COFFEE': 'coffee drink', 'SLUSHIE': 'slushie'}.get(drink_type, 'drink')
+        
+        count_limit = "EXACTLY 3" if drink_type != 'COFFEE' else "BETWEEN 3 and 5"
+        extra_rules = ""
+        if drink_type == 'COFFEE':
+            extra_rules = "5. MANDATORY: For Coffee Lab synthesis, include exactly one 'Additive' or 'Creamer' as a final stabilizer."
+
+        prompt = f"""[AUTONOMOUS SYNTHESIS REQUEST] — RAW JSON DATA ONLY. [NO PREAMBLE].
+        
+Task: Select {count_limit} ingredients from the Inventory Registry below to create a cohesive {drink_label} compound.
+Lab Mode: {tone}
+
+Rules:
+1. USE THE EXACT NOMENCLATURE from the Inventory Registry.
+2. Select a base (e.g. coffee/syrup) and complementary reagents.
+3. Provide a 'design_intent' (overall reasoning for the pairing, max 20 words).
+4. For each ingredient, provide a specific 'role' (max 8 words).
+{extra_rules}
+
+OUTPUT FORMAT: A raw JSON object.
+{{
+    "design_intent": "Brief overall reasoning...",
+    "selection": [
+        {{ "name": "Ingredient Name", "role": "Specific role in mix" }},
+        ...
+    ]
+}}
+
+Inventory Registry for Selection:
+"""
+        response = cls.chat(prompt, context=inventory)
+        return cls._extract_json(response)
 
     @classmethod
     def synthesize_flavor_summary(cls, ingredients, drink_type='SODA'):
@@ -216,12 +304,40 @@ Do NOT give preparation instructions. Do NOT suggest more ingredients. No markdo
             "intensity": float,
             "sweetness": float,
             "acidity": float,
-            "bitterness": float
+            "bitterness": float,
+            "complexity": float
         }}
         Base your analysis on chemical flavor profiles.
         """
         response = cls.chat(prompt)
         # Resilient JSON extraction
+        return cls._extract_json(response)
+
+    @classmethod
+    def bulk_analyze_flavor_profiles(cls, ingredients_data):
+        """
+        Analyze a list of ingredients in a single batch.
+        ingredients_data: List of {'name': str, 'description': str}
+        """
+        ing_text = "\n".join([f"- Name: {ing['name']}, Description: {ing['description']}" for ing in ingredients_data])
+        prompt = f"""
+        [BATCH CHEMICAL ANALYSIS]
+        Analyze the following reagents and synthesize their flavor profiles.
+        
+        Ingredients to analyze:
+        {ing_text}
+        
+        For each, return values from 1.0 to 5.0 (decimals allowed) for:
+        - intensity
+        - sweetness
+        - acidity
+        - bitterness
+        - complexity
+        
+        OUTPUT FORMAT: A raw JSON array of objects. [NO MARKDOWN] [NO PREAMBLE].
+        Example: [{{ "name": "Lemon", "intensity": 4.5, "sweetness": 2.0, "acidity": 5.0, "bitterness": 1.5, "complexity": 1.5 }}]
+        """
+        response = cls.chat(prompt)
         return cls._extract_json(response)
 
     @staticmethod
@@ -304,7 +420,16 @@ Do NOT give preparation instructions. Do NOT suggest more ingredients. No markdo
             "temperature": 0.7
         }
         response = cls._safe_request('POST', url, headers=headers, json=data, timeout=30)
-        return response.json()['choices'][0]['message']['content']
+        result = response.json()
+        
+        content = result['choices'][0]['message']['content'] if 'choices' in result else ""
+        
+        # 📡 RAW LLM SIGNAL RECEIVED
+        print(f"📡 RAW LLM SIGNAL ({provider.name}): {len(content)} tokens received.")
+        if not content.strip():
+             print(f"⚠️  WARNING: Empty signal from {provider.name}! Full response: {result}")
+             
+        return content
 
     @classmethod
     def _call_ollama(cls, provider, messages):
@@ -315,11 +440,20 @@ Do NOT give preparation instructions. Do NOT suggest more ingredients. No markdo
             "messages": messages,
             "stream": False,
             "options": {
-                "num_predict": 512  # Cap generation to prevent runaway responses
+                "num_predict": 2048  # High headroom for CoT models (Thinking Process)
             }
         }
         response = cls._safe_request('POST', url, json=data, timeout=120)
-        return response.json()['message']['content']
+        result = response.json()
+        
+        content = result.get('message', {}).get('content', "")
+        
+        # 📡 RAW LLM SIGNAL RECEIVED
+        print(f"📡 RAW LLM SIGNAL (OLLAMA): {len(content)} tokens received.")
+        if not content.strip():
+             print(f"⚠️  WARNING: Empty signal from Ollama! Full Response: {result}")
+             
+        return content
 
     @classmethod
     def _call_claude(cls, provider, messages):
@@ -364,4 +498,99 @@ Do NOT give preparation instructions. Do NOT suggest more ingredients. No markdo
             data["system_instruction"] = {"parts": [{"text": system_text}]}
             
         response = cls._safe_request('POST', url, json=data, timeout=30)
-        return response.json()['candidates'][0]['content']['parts'][0]['text']
+        result = response.json()
+        
+        try:
+            content = result['candidates'][0]['content']['parts'][0]['text']
+        except (KeyError, IndexError):
+            content = ""
+            
+        # 📡 RAW LLM SIGNAL RECEIVED
+        print(f"📡 RAW LLM SIGNAL (GEMINI): {len(content)} tokens received.")
+        if not content.strip():
+             print(f"⚠️  WARNING: Empty signal from Gemini! Full Response: {result}")
+             
+        return content
+
+    @classmethod
+    def _call_openai_stream(cls, provider, messages):
+        url = provider.base_url or "https://api.openai.com/v1/chat/completions"
+        headers = {"Authorization": f"Bearer {provider.api_key}", "Content-Type": "application/json"}
+        data = {"model": provider.default_model or "gpt-3.5-turbo", "messages": messages, "temperature": 0.7, "stream": True}
+        response = requests.post(url, headers=headers, json=data, stream=True, timeout=60)
+        response.raise_for_status()
+        for line in response.iter_lines():
+            if line:
+                line = line.decode('utf-8')
+                if line.startswith('data: '):
+                    data_str = line[6:]
+                    if data_str == '[DONE]': break
+                    try:
+                        data_json = json.loads(data_str)
+                        if 'choices' in data_json and len(data_json['choices']) > 0:
+                            delta = data_json['choices'][0].get('delta', {})
+                            if 'content' in delta:
+                                yield f"data: {json.dumps({'chunk': delta['content']})}\n\n"
+                    except json.JSONDecodeError: pass
+
+    @classmethod
+    def _call_ollama_stream(cls, provider, messages):
+        url = (provider.base_url or "http://localhost:11434").rstrip('/') + "/api/chat"
+        data = {"model": provider.default_model or "mistral", "messages": messages, "stream": True, "options": {"num_predict": 2048}}
+        response = requests.post(url, json=data, stream=True, timeout=120)
+        response.raise_for_status()
+        for line in response.iter_lines():
+            if line:
+                try:
+                    data_json = json.loads(line.decode('utf-8'))
+                    if 'message' in data_json and 'content' in data_json['message']:
+                        yield f"data: {json.dumps({'chunk': data_json['message']['content']})}\n\n"
+                except json.JSONDecodeError: pass
+
+    @classmethod
+    def _call_claude_stream(cls, provider, messages):
+        url = "https://api.anthropic.com/v1/messages"
+        headers = {"x-api-key": provider.api_key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
+        system = messages[0]['content']
+        actual_messages = messages[1:]
+        data = {"model": provider.default_model or "claude-3-haiku-20240307", "system": system, "messages": actual_messages, "max_tokens": 1024, "stream": True}
+        response = requests.post(url, headers=headers, json=data, stream=True, timeout=60)
+        response.raise_for_status()
+        for line in response.iter_lines():
+            if line:
+                line = line.decode('utf-8')
+                if line.startswith('data: '):
+                    data_str = line[6:]
+                    try:
+                        data_json = json.loads(data_str)
+                        if data_json.get('type') == 'content_block_delta':
+                            delta = data_json.get('delta', {})
+                            if delta.get('type') == 'text_delta':
+                                yield f"data: {json.dumps({'chunk': delta.get('text', '')})}\n\n"
+                    except json.JSONDecodeError: pass
+
+    @classmethod
+    def _call_gemini_stream(cls, provider, messages):
+        api_key = provider.api_key
+        model = provider.default_model or "gemini-1.5-flash"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?alt=sse&key={api_key}"
+        system_text = messages[0]['content'] if messages and messages[0]['role'] == 'system' else ""
+        actual_messages = messages[1:] if system_text else messages
+        contents = [{"role": "user" if m['role'] == 'user' else "model", "parts": [{"text": m['content']}]} for m in actual_messages]
+        data = {"contents": contents}
+        if system_text: data["system_instruction"] = {"parts": [{"text": system_text}]}
+        response = requests.post(url, json=data, stream=True, timeout=60)
+        response.raise_for_status()
+        for line in response.iter_lines():
+            if line:
+                line = line.decode('utf-8')
+                if line.startswith('data: '):
+                    data_str = line[6:]
+                    try:
+                        data_json = json.loads(data_str)
+                        if 'candidates' in data_json and len(data_json['candidates']) > 0:
+                            parts = data_json['candidates'][0].get('content', {}).get('parts', [])
+                            if parts:
+                                yield f"data: {json.dumps({'chunk': parts[0].get('text', '')})}\n\n"
+                    except json.JSONDecodeError: pass
+

@@ -5,7 +5,7 @@ from django.db.models import Count, Avg
 from django.utils import timezone
 from datetime import timedelta
 from django.core import serializers
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.core.exceptions import ValidationError
@@ -13,6 +13,7 @@ from django.contrib.auth.decorators import user_passes_test
 import json
 import requests
 import traceback
+import random
 from django.contrib.auth import login, logout, authenticate
 from django.db import IntegrityError
 from django.contrib import messages
@@ -117,6 +118,7 @@ def add_ingredient(request):
     sweetness = request.POST.get('sweetness', 3)
     acidity = request.POST.get('acidity', 3)
     bitterness = request.POST.get('bitterness', 1)
+    complexity = request.POST.get('complexity', 3)
     
     systems = request.POST.getlist('compatible_systems')
     compatible_systems = ",".join(systems) if systems else "SODA,COFFEE,SLUSHIE"
@@ -132,6 +134,7 @@ def add_ingredient(request):
                 sweetness=sweetness,
                 acidity=acidity,
                 bitterness=bitterness,
+                complexity=complexity,
                 compatible_systems=compatible_systems,
                 is_in_inventory=True
             )
@@ -166,6 +169,7 @@ def edit_ingredient(request, pk):
         ingredient.sweetness = int(request.POST.get('sweetness', ingredient.sweetness))
         ingredient.acidity = int(request.POST.get('acidity', ingredient.acidity))
         ingredient.bitterness = int(request.POST.get('bitterness', ingredient.bitterness))
+        ingredient.complexity = int(request.POST.get('complexity', ingredient.complexity))
     except ValueError:
         pass
         
@@ -353,6 +357,18 @@ def create_recipe(request):
     })
 
 
+@csrf_exempt
+@require_http_methods(["POST"])
+def delete_history_api(request, pk):
+    """Decommission a MixHistory entry."""
+    mix = get_object_or_404(MixHistory, pk=pk)
+    try:
+        mix.delete()
+        return JsonResponse({'status': 'success', 'message': 'Archival protocol decommissioned.'})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
 def edit_recipe(request, pk):
     """Edit an existing recipe."""
     recipe = get_object_or_404(Recipe, pk=pk)
@@ -392,11 +408,20 @@ def edit_recipe(request, pk):
                     ingredient_id = int(key.replace('amount_', ''))
                     amount = float(value)
                     notes = request.POST.get(f'notes_{ingredient_id}', '')
+                    
+                    # Capture synthesized profile overrides
+                    profile_overrides = {}
+                    for field in ['intensity', 'sweetness', 'acidity', 'bitterness']:
+                        val = request.POST.get(f'{field}_{ingredient_id}')
+                        if val and val.strip().isdigit():
+                            profile_overrides[field] = int(val)
+                    
                     RecipeIngredient.objects.create(
                         recipe=recipe,
                         ingredient_id=ingredient_id,
                         amount=amount,
-                        notes=notes
+                        notes=notes,
+                        **profile_overrides
                     )
                 except (ValueError, TypeError, Ingredient.DoesNotExist, IntegrityError):
                     continue
@@ -566,9 +591,11 @@ def get_recommendations_api(request):
         data = json.loads(request.body)
         ingredient_ids = data.get('ingredient_ids', [])
         experimental = data.get('mode') == 'experimental' or data.get('experimental', False)
+        force_type = data.get('force_type') # e.g. 'ADDITIVE'
+        drink_type = data.get('drink_type', 'SODA')
 
         if len(ingredient_ids) == 0:
-            result = get_recommendation([], experimental=experimental)
+            result = get_recommendation([], drink_type=drink_type, experimental=experimental, force_type=force_type)
             serialized_recs = [
                 {
                     'id': r['ingredient'].id,
@@ -581,7 +608,7 @@ def get_recommendations_api(request):
                 } for r in result.get('recommended', [])
             ]
         elif len(ingredient_ids) == 1:
-            result = get_tiered_recommendation(ingredient_ids[0], experimental=experimental)
+            result = get_tiered_recommendation(ingredient_ids[0], drink_type=drink_type, experimental=experimental, force_type=force_type)
             serialized_recs = [
                 {
                     'id': r['ingredient'].id,
@@ -594,7 +621,7 @@ def get_recommendations_api(request):
                 } for r in result.get('recommended', [])
             ]
         else:
-            result = get_tiered_recommendation(ingredient_ids[0], ingredient_ids[1], experimental=experimental)
+            result = get_tiered_recommendation(ingredient_ids[0], ingredient_ids[1], drink_type=drink_type, experimental=experimental, force_type=force_type)
             serialized_recs = [
                 {
                     'id': r['ingredient'].id,
@@ -649,7 +676,11 @@ def add_recipe_api(request):
                     recipe=recipe,
                     ingredient_id=int(ingredient_id),
                     amount=float(amount),
-                    notes=notes
+                    notes=notes,
+                    intensity=ingredient_data.get('intensity'),
+                    sweetness=ingredient_data.get('sweetness'),
+                    acidity=ingredient_data.get('acidity'),
+                    bitterness=ingredient_data.get('bitterness')
                 )
 
         return JsonResponse({
@@ -713,13 +744,24 @@ def save_mix_to_history_api(request):
                 ingredient_id = int(raw_id)
                 amount = float(item.get('amount', 1.0))
                 
+                # Extract synthesized profile overrides if provided
+                profile = item.get('profile', {})
+                intensity = profile.get('intensity') if profile else item.get('intensity')
+                sweetness = profile.get('sweetness') if profile else item.get('sweetness')
+                acidity = profile.get('acidity') if profile else item.get('acidity')
+                bitterness = profile.get('bitterness') if profile else item.get('bitterness')
+                
                 # Verify ingredient existence to prevent broken relations
                 target_ing = Ingredient.objects.filter(id=ingredient_id).first()
                 if target_ing:
                     MixHistoryIngredient.objects.create(
                         mix=mix,
                         ingredient=target_ing,
-                        amount=amount
+                        amount=amount,
+                        intensity=intensity,
+                        sweetness=sweetness,
+                        acidity=acidity,
+                        bitterness=bitterness
                     )
             except (ValueError, TypeError):
                 continue
@@ -757,7 +799,12 @@ def promote_mix_to_recipe_api(request, pk):
                 RecipeIngredient.objects.create(
                     recipe=recipe,
                     ingredient=mi.ingredient,
-                    amount=mi.amount
+                    amount=mi.amount,
+                    # Carry over synthesized profile overrides
+                    intensity=mi.intensity,
+                    sweetness=mi.sweetness,
+                    acidity=mi.acidity,
+                    bitterness=mi.bitterness
                 )
         
         if category_ids:
@@ -864,27 +911,99 @@ def export_recipe_to_mealie_api(request, pk):
     if recipe.brew_method:
         lab_description += f"- **Method**: {recipe.get_brew_method_display()}\n"
     
-    # Format ingredients for Mealie
+    import uuid
     mealie_ingredients = []
     for ring in recipe.recipe_ingredients.all():
         unit = "oz" if recipe.drink_type == "SLUSHIE" else ("g" if recipe.drink_type == "COFFEE" else "ml")
+        ing_full_name = ring.ingredient.name
+        amount = float(ring.amount)
+        
+        display_text = f"{amount} {unit} {ing_full_name}"
+        if ring.notes:
+            display_text += f" ({ring.notes})"
+        
+        # Absolute minimum viable payload for Mealie v1.x
+        # OMITTING `unit`, `food`, `quantity`, etc. prevents Pydantic TypeErrors on their backend.
+        # However, `title` MUST be present for the ingredient to actually appear in the UI cards!
         mealie_ingredients.append({
-            "note": f"{ring.amount} {unit} - {ring.ingredient.name} {f'({ring.notes})' if ring.notes else ''}".strip()
+            "referenceId": str(uuid.uuid4()),
+            "note": display_text,
+            "title": ing_full_name,
+            "display": display_text
         })
+
+    # Mealie creation often requires at least one instruction step to render successfully
+    # Injecting unique 'id' UUIDs to satisfy strict Mealie parsing requirements
+    instructions = [
+        {
+            "id": str(uuid.uuid4()), 
+            "title": "Preparation", 
+            "text": f"Initiate Laboratory Extract protocol for {recipe.get_drink_type_display()}.",
+            "ingredientReferences": []
+        },
+        {
+            "id": str(uuid.uuid4()), 
+            "title": "Synthesis", 
+            "text": "Assemble molecular components according to synthesis specifications.",
+            "ingredientReferences": []
+        }
+    ]
 
     payload = {
         "name": recipe.name,
         "description": lab_description,
         "recipeYield": "1 serving",
         "recipeIngredient": mealie_ingredients,
-        "tags": [cat.name for cat in recipe.categories.all()]
+        "recipeInstructions": instructions,
     }
 
     try:
-        response = requests.post(url, json=payload, headers=headers, timeout=10)
-        response.raise_for_status()
-        return JsonResponse({'status': 'success', 'message': f'Recipe successfully pushed to Mealie!'})
+        # Phase 1: Initialize Recipe Shell
+        init_payload = {"name": payload['name']}
+        print(f"📦 MEALIE EXPORT (Phase 1): Initializing Shell at {url}")
+        
+        response = requests.post(url, json=init_payload, headers=headers, timeout=15, allow_redirects=False)
+        
+        # Hack to preserve POST during HTTP -> HTTPS 301/302 proxy redirects
+        if response.status_code in [301, 302, 307, 308]:
+            new_url = response.headers.get('Location')
+            if new_url:
+                print(f"🔄 MEALIE EXPORT: Intercepted proxy redirect. Following POST to: {new_url}")
+                url = new_url # update base url for Phase 2
+                response = requests.post(url, json=init_payload, headers=headers, timeout=15, allow_redirects=False)
+
+        if response.status_code not in [200, 201]:
+             print(f"⚠️  WARNING: Mealie Initialization Failed! Response: {response.text}")
+             return JsonResponse({'error': f'Mealie rejected the initialization (HTTP {response.status_code}): {response.text}'}, status=502)
+
+        # Extract Slug
+        recipe_data = response.json()
+        
+        slug = None
+        if isinstance(recipe_data, dict):
+            slug = recipe_data.get('slug') or recipe_data.get('id')
+        elif isinstance(recipe_data, str):
+            slug = recipe_data
+
+        if not slug:
+             print(f"⚠️  WARNING: Mealie returned success without a slug. Response: {recipe_data}")
+             return JsonResponse({'error': 'Mealie successfully initialized but failed to return a valid slug/id.'}, status=502)
+
+        # Phase 2: Inject Molecular Data
+        patch_url = f"{url.rstrip('/')}/{slug}"
+        print(f"📦 MEALIE EXPORT (Phase 2): Injecting data into {patch_url}")
+        
+        patch_response = requests.patch(patch_url, json=payload, headers=headers, timeout=15)
+        
+        if patch_response.status_code in [200, 201]:
+             print(f"📡 MEALIE RESPONSE: HTTP {patch_response.status_code} - Data Synchronized!")
+             return JsonResponse({'status': 'success', 'message': 'Recipe successfully pushed and enriched in Mealie!'})
+        else:
+             print(f"⚠️  WARNING: Mealie Data Injection Failed! Response: {patch_response.text}")
+             return JsonResponse({'error': f'Mealie rejected the data injection (HTTP {patch_response.status_code}): {patch_response.text}'}, status=502)
+
     except requests.exceptions.RequestException as e:
+        print(f"❌ MEALIE CONNECTION ERROR: {str(e)}")
         return JsonResponse({'error': f'Failed to contact Mealie: {str(e)}'}, status=502)
 
 
@@ -931,23 +1050,17 @@ def ai_chat_api(request):
         inventory_context = "\n".join(registry)
 
         prompt = user_message + lab_context
-        response_text = AIAssistant.chat(prompt, history=history, context=inventory_context)
         
-        # Consistent response key for frontend
-        return JsonResponse({'suggestion': response_text, 'status': 'success'})
+        # Bridge to the streaming generator
+        response_generator = AIAssistant.chat_stream(prompt, history=history, context=inventory_context)
+        return StreamingHttpResponse(response_generator, content_type='text/event-stream')
+        
     except Exception as e:
         print(f"DEBUG: Laboratory Communication Failure: {str(e)}")
         traceback.print_exc()
         return JsonResponse({'error': f"Laboratory Communication Failure: {str(e)}"}, status=500)
 
 
-@csrf_exempt
-@require_http_methods(["POST"])
-def ai_keep_warm_api(request):
-    """Check provider status and keep local models warm in VRAM."""
-    status = AIAssistant.check_status()
-    # 'pulsed' is the legacy key the frontend checks — map synchronized → pulsed
-    return JsonResponse({'status': 'pulsed' if status == 'synchronized' else status})
 
 
 @csrf_exempt
@@ -980,9 +1093,6 @@ def save_llm_provider_api(request):
             config.default_llm_provider = provider
             config.save()
             
-        # Trigger an immediate wakeup pulse if enabled
-        if provider.is_enabled:
-            AIAssistant.keep_warm()
             
         return JsonResponse({'status': 'success', 'id': provider.id})
     except Exception as e:
@@ -1097,11 +1207,15 @@ def ai_suggest_api(request):
         inventory_context = "\n".join(registry)
 
         # Implementation of 🧪 AI Protocol: Automated Retry & Verification
-        # Up to 2 attempts to get structured data
+        # Up to 3 attempts to get structured data (Signal Hardening)
         raw_suggestion = ""
         retry_note = None
         
-        for attempt in range(2):
+        for attempt in range(3):
+            # On the final attempt, strip persona for brute-force compliance
+            if attempt == 2 and not retry_note:
+                 retry_note = "CRITICAL DATA MISMATCH: STOP all prose. Provide ONLY the JSON array of ingredients from the registry. [RAW JSON ONLY]"
+            
             raw_suggestion = AIAssistant.suggest_autonomous(
                 ingredients, mode, 
                 inventory=inventory_context, 
@@ -1109,7 +1223,7 @@ def ai_suggest_api(request):
                 retry_note=retry_note
             )
             
-            # Use the new resilient JSON extractor
+            # Use the resilient JSON extractor
             suggested_data = AIAssistant._extract_json(raw_suggestion)
             
             if suggested_data and isinstance(suggested_data, list):
@@ -1122,7 +1236,6 @@ def ai_suggest_api(request):
                     if not ing_name: continue
                     
                     target_obj = None
-                    
                     # Tier 1: Exact Match
                     for inv in inventory_items:
                         if inv.name.lower() == ing_name:
@@ -1138,23 +1251,18 @@ def ai_suggest_api(request):
                                 break
                                 
                     if target_obj:
-                        # Calculate Molecular Resonance Level (based on intensity delta and a small random variance)
-                        # We use the first ingredient as a baseline for intensity matching if available
+                        # Calculate Molecular Resonance Level
                         import random
                         intensity_delta = 0
                         if ingredients:
-                            # Robust Intensity matching: Case-insensitive lookup for the first protocol reagent
                             baseline_name = ingredients[0].strip().lower()
                             first_ing = next((inv for inv in inventory_items if inv.name.lower() == baseline_name), None)
-                            
-                            # Fallback to direct DB query if not in current registry slice
                             if not first_ing:
                                 first_ing = Ingredient.objects.filter(name__iexact=ingredients[0]).first()
                             
                             base_intensity = first_ing.intensity if first_ing else 3
                             intensity_delta = abs(target_obj.intensity - base_intensity)
                         
-                        # Resonance score: base 85% + up to 12% bonus for intensity proximity + small random flux
                         resonance = 85 + (max(0, 3 - intensity_delta) * 4) + random.uniform(0.1, 2.5)
                         
                         enriched.append({
@@ -1163,7 +1271,8 @@ def ai_suggest_api(request):
                             'category': target_obj.category,
                             'intensity': target_obj.intensity,
                             'resonance': round(min(resonance, 99.8), 1),
-                            'reason': item.get('reason', 'Molecular Affinity Match')
+                            'reason': item.get('reason', 'Molecular Affinity Match'),
+                            'profile': item.get('profile', None)  # Pass synthesized overrides if present
                         })
                 
                 if enriched:
@@ -1171,7 +1280,7 @@ def ai_suggest_api(request):
                     return JsonResponse({'status': 'success', 'suggestions': enriched})
             
             # Incrementally improve prompt if we failed
-            retry_note = "Your last synthesis signal was unparseable or used invalid nomenclature. Please adhere strictly to the JSON array format using the Inventory Registry's exact names."
+            retry_note = "Your last synthesis signal was unparseable. Adhere strictly to the JSON array format using the Inventory Registry's exact names. [NO MARKDOWN]"
 
         # Final Fallback: If all attempts failed to produce cards
         if not raw_suggestion or not raw_suggestion.strip():
@@ -1225,11 +1334,68 @@ def ai_analyze_ingredient_api(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+def ai_bulk_analyze_api(request):
+    """Perform a batch synthesis of flavor profiles for all reagents in inventory."""
+    if not request.user.is_staff:
+        return JsonResponse({'error': 'Staff authentication required.'}, status=403)
+        
+    try:
+        # 1. Identify reagents needing analysis
+        # Analysis targets: Ingredients in inventory currently at total default stats (3,3,3,1,3)
+        targets = Ingredient.objects.filter(
+            is_in_inventory=True,
+            intensity=3, sweetness=3, acidity=3, bitterness=1, complexity=3
+        )
+        
+        if not targets.exists():
+            return JsonResponse({'status': 'complete', 'message': 'All inventory reagents are already synthesized.'})
+            
+        target_list = list(targets)
+        batch_size = 15
+        total_analyzed = 0
+        
+        # 2. Process in batches to respect token/latency limits
+        for i in range(0, len(target_list), batch_size):
+            batch = target_list[i : i + batch_size]
+            batch_data = [{'name': t.name, 'description': t.description or ''} for t in batch]
+            
+            results = AIAssistant.bulk_analyze_flavor_profiles(batch_data)
+            
+            if results and isinstance(results, list):
+                for res in results:
+                    ing_name = res.get('name', '').lower()
+                    # Fuzzy match to link AI response back to model
+                    match = next((t for t in batch if t.name.lower() == ing_name), None)
+                    if not match:
+                        # Secondary attempt: check if name is contained
+                        match = next((t for t in batch if ing_name in t.name.lower() or t.name.lower() in ing_name), None)
+                        
+                    if match:
+                        match.intensity = max(1, min(5, round(res.get('intensity', match.intensity))))
+                        match.sweetness = max(1, min(5, round(res.get('sweetness', match.sweetness))))
+                        match.acidity = max(1, min(5, round(res.get('acidity', match.acidity))))
+                        match.bitterness = max(1, min(5, round(res.get('bitterness', match.bitterness))))
+                        match.complexity = max(1, min(5, round(res.get('complexity', match.complexity))))
+                        match.save()
+                        total_analyzed += 1
+                        
+        return JsonResponse({
+            'status': 'success', 
+            'message': f'Bulk analysis complete. {total_analyzed} reagents synchronized.'
+        })
+    except Exception as e:
+        traceback.print_exc()
+        return JsonResponse({'error': f"Bulk Synthesis Failure: {str(e)}"}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
 def random_pairing_api(request):
-    """Generate a random 3-ingredient combination based on the current mode."""
+    """Generate a 3-ingredient combination, prioritizing AI-driven autonomous synthesis."""
     try:
         data = json.loads(request.body)
         drink_type = data.get('drink_type', 'SODA')
+        mode = data.get('mode', 'standard')
         
         # 1. Get compatible ingredients in inventory
         all_compatible = Ingredient.objects.filter(
@@ -1240,20 +1406,78 @@ def random_pairing_api(request):
         if all_compatible.count() < 3:
              return JsonResponse({'error': 'Insufficient reagents in inventory for a random synthesis.'}, status=400)
 
-        # 2. Try to pick a base (Soda Syrup or Coffee Bean)
-        base_types = ['SODA_SYRUP', 'COFFEE_BEAN']
-        potential_bases = all_compatible.filter(ingredient_type__in=base_types)
-        
         selection = []
-        if potential_bases.exists():
-            selection.append(random.choice(list(potential_bases)))
+        design_intent = ""
         
-        # 3. Fill up to 3
-        remaining_reagents = list(all_compatible.exclude(id__in=[i.id for i in selection]))
-        random.shuffle(remaining_reagents)
+        # 2. Attempt AI Autonomous Synthesis
+        status = AIAssistant.check_status()
+        if status == 'synchronized':
+            # Collect inventory context
+            inventory_context = [
+                f"{i.name} (Category: {i.category}, Type: {i.get_ingredient_type_display()})"
+                for i in all_compatible
+            ]
+            
+            ai_result = AIAssistant.synthesize_surprise_mix(
+                inventory=inventory_context,
+                mode=mode,
+                drink_type=drink_type
+            )
+            
+            if ai_result and 'selection' in ai_result:
+                design_intent = ai_result.get('design_intent', '')
+                for item in ai_result['selection']:
+                    name = item.get('name', '').lower()
+                    # Try to find the exact or fuzzy match in our compatible list
+                    match = next((i for i in all_compatible if i.name.lower() == name), None)
+                    if not match:
+                        # Fuzzy check
+                        match = next((i for i in all_compatible if name in i.name.lower() or i.name.lower() in name), None)
+                    
+                    if match and match not in selection:
+                        selection.append(match)
         
-        while len(selection) < 3 and remaining_reagents:
-            selection.append(remaining_reagents.pop())
+        # 3. Fallback to Programmatic Randomizer if AI failed or provided less than 3 valid items
+        target_count = 3 if drink_type != 'COFFEE' else random.randint(3, 5)
+        
+        if len(selection) < target_count:
+            selection = [] # Clear any partial AI selection
+            design_intent = "" 
+            
+            # Try to pick a base (Soda Syrup or Coffee Bean)
+            base_types = ['SODA_SYRUP', 'COFFEE_BEAN']
+            potential_bases = all_compatible.filter(ingredient_type__in=base_types)
+            
+            if potential_bases.exists():
+                selection.append(random.choice(list(potential_bases)))
+            
+            # For Coffee, we want to ensure an additive is included if we are doing a longer mix
+            if drink_type == 'COFFEE' and target_count >= 3:
+                # Reserve the last slot for an ADDITIVE if possible
+                additives = all_compatible.filter(ingredient_type='ADDITIVE').exclude(id__in=[i.id for i in selection])
+                if additives.exists():
+                    target_additive = random.choice(list(additives))
+                    # We'll add this at the end, so we fill up to (target_count - 1) first
+                    
+                    remaining_reagents = list(all_compatible.exclude(id__in=[i.id for i in selection]).exclude(id=target_additive.id))
+                    random.shuffle(remaining_reagents)
+                    
+                    while len(selection) < (target_count - 1) and remaining_reagents:
+                        selection.append(remaining_reagents.pop())
+                    
+                    selection.append(target_additive)
+                else:
+                    # No additives, just fill normally
+                    remaining_reagents = list(all_compatible.exclude(id__in=[i.id for i in selection]))
+                    random.shuffle(remaining_reagents)
+                    while len(selection) < target_count and remaining_reagents:
+                        selection.append(remaining_reagents.pop())
+            else:
+                remaining_reagents = list(all_compatible.exclude(id__in=[i.id for i in selection]))
+                random.shuffle(remaining_reagents)
+                
+                while len(selection) < target_count and remaining_reagents:
+                    selection.append(remaining_reagents.pop())
             
         # 4. Format for response
         result = []
@@ -1262,9 +1486,14 @@ def random_pairing_api(request):
                 'id': ing.id,
                 'name': ing.name,
                 'category': ing.category,
-                'intensity': ing.intensity
+                'intensity': ing.intensity,
+                'complexity': ing.complexity
             })
             
-        return JsonResponse({'status': 'success', 'ingredients': result})
+        return JsonResponse({
+            'status': 'success', 
+            'ingredients': result,
+            'reasoning': design_intent
+        })
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)

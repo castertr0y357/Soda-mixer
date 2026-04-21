@@ -67,7 +67,14 @@
                 <div class="mb-4" id="selectedArea" style="display: none;">
                     <div class="d-flex justify-content-between align-items-end mb-2">
                         <label class="readout-label mb-0">Current Compound</label>
-                        <div class="d-flex gap-2">
+                        <div class="d-flex gap-2 align-items-center">
+                            <div class="d-flex align-items-center gap-2 me-3 pb-1 border-bottom border-white border-opacity-10" id="scaleContainer" style="display: none;">
+                                <span class="readout-label mb-0" style="font-size: 0.55rem; letter-spacing: 1px;">BATCH SCALE</span>
+                                <div class="btn-group btn-group-xs pb-1">
+                                    <button type="button" class="btn btn-xs btn-glass-toggle px-2 py-0 active-lab-mode" id="scale1L" onclick="setBottleScale(1.0)">1.0L</button>
+                                    <button type="button" class="btn btn-xs btn-glass-toggle px-2 py-0" id="scale05L" onclick="setBottleScale(0.5)">0.5L</button>
+                                </div>
+                            </div>
                             <button type="button" class="btn btn-xs btn-outline-info opacity-75 hover-opacity-100" onclick="stepBack()">
                                 <i class="bi bi-arrow-left"></i> STEP BACK
                             </button>
@@ -89,9 +96,14 @@
                 <div id="stepContainer" class="p-4 rounded-4 bg-dark bg-opacity-25 border border-white border-opacity-5">
                     <div class="d-flex justify-content-between align-items-center mb-4 w-100">
                         <h5 class="fw-bold mb-0 text-gradient-lab" id="stepTitle">Step 1: Select Base Component</h5>
-                        <button type="button" class="btn btn-xs btn-outline-experimental" onclick="surpriseMe()" id="surpriseBtn">
-                            <i class="bi bi-dice-3 me-1"></i> SURPRISE ME
-                        </button>
+                        <div class="d-flex gap-2">
+                            <button type="button" id="skipToCreamerBtn" class="btn btn-xs btn-outline-info" style="display: none;" onclick="startCreamerTransition()">
+                                <i class="bi bi-arrow-right-circle me-1"></i> SKIP TO CREAMER
+                            </button>
+                            <button type="button" class="btn btn-xs btn-outline-experimental" onclick="surpriseMe()" id="surpriseBtn">
+                                <i class="bi bi-dice-3 me-1"></i> SURPRISE ME
+                            </button>
+                        </div>
                     </div>
                     
                     <div class="row g-3" id="availableIngredients">
@@ -145,15 +157,6 @@
     </div>
     
     <div class="col-lg-4">
-        <div class="glass-surface p-4 h-100 mb-4">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h4 class="mb-0"><i class="bi bi-box-seam me-2 text-primary"></i>Inventory</h4>
-                <div class="small text-dim bg-white bg-opacity-5 px-2 py-1 rounded small border border-white border-opacity-10">
-                    <span class="status-dot dot-accent me-1" style="width:6px; height:6px;"></span> Registry Online: {{ ingredients|length }}
-                </div>
-            </div>
-        </div>
-
         <!-- AI Assistant Interface (Permanent Console) -->
         <div id="ai-chat-panel" class="glass-surface border-lab mb-4 active" style="position: static; width: 100%; height: 500px; display: flex; flex-direction: column;">
             <div class="ai-chat-header px-3 py-2 border-bottom border-white border-opacity-10">
@@ -162,21 +165,12 @@
                         <i class="bi bi-robot fs-5"></i>
                         <span class="fw-bold small">LABORATORY ASSISTANT</span>
                     </div>
-                    <div class="d-flex align-items-center gap-3">
-                        <div id="aiStatus" class="small text-dim ls-1 d-flex align-items-center gap-1" style="font-size: 0.65rem;">
-                            <span class="status-dot"></span> <span id="aiStatusText">DORMANT</span>
-                        </div>
-                        <div class="form-check form-switch mb-0" title="Proactive Guidance">
-                            <input class="form-check-input small" type="checkbox" id="aiProactiveToggle" checked>
-                        </div>
+                    <div class="form-check form-switch mb-0" title="Proactive Guidance">
+                        <input class="form-check-input small" type="checkbox" id="aiProactiveToggle" checked>
                     </div>
                 </div>
             </div>
             
-            <div class="warming-indicator" id="aiWarming" style="display: none;">
-                <i class="bi bi-cpu-fill me-1"></i> LLM SUBSTRATE WARMING UP...
-            </div>
-
             <div class="ai-chat-body flex-grow-1 p-3" id="aiChatBody" style="overflow-y: auto;">
                 <div class="chat-msg msg-assistant">
                     Hello, Lead Mixologist. I am ready to assist in your flavor syntheses. How shall we experiment today?
@@ -228,9 +222,22 @@
     let currentLabMode = 'SODA';
     let recommendationMode = 'standard';
     let selectedIngredients = []; 
+    let bottleScale = 1.0; 
+    let isCreamerTransition = false;
     let allIngredientsHtml = ''; 
     let originalRecipesHtml = '';
     const themeStats = JSON.parse('{{ stats_json|escapejs }}');
+
+    function setBottleScale(scale) {
+        bottleScale = parseFloat(scale);
+        document.getElementById('scale1L').classList.toggle('active-lab-mode', bottleScale === 1.0);
+        document.getElementById('scale05L').classList.toggle('active-lab-mode', bottleScale === 0.5);
+        updateSelectedArea();
+    }
+
+    function mlToOz(ml) {
+        return (ml * 0.033814).toFixed(1);
+    }
 
     document.addEventListener('DOMContentLoaded', function() {
         allIngredientsHtml = document.getElementById('availableIngredients').innerHTML;
@@ -245,8 +252,6 @@
         setLabMode(savedMode, true); 
         setRecommendationMode(savedRecMode);
         
-        // Trigger initial heartbeat
-        if (typeof heartbeat === 'function') heartbeat();
     });
 
     function setRecommendationMode(mode) {
@@ -278,8 +283,6 @@
             quickExp.classList.toggle('active-experimental', mode === 'experimental');
         }
 
-        // Trigger model wakeup on toggle (especially helpful for Experimental mode)
-        if (typeof heartbeat === 'function') heartbeat();
         
         if (selectedIngredients.length > 0) {
             fetchRecommendations();
@@ -317,12 +320,13 @@
             if (mode === 'SODA') {
                 isTypeMatch = (type === 'SODA_SYRUP' || type === 'ADDITIVE' || type === 'OTHER');
             } else if (mode === 'COFFEE') {
-                isTypeMatch = (type === 'COFFEE_BEAN' || type === 'ADDITIVE' || type === 'OTHER');
+                // Allow Soda Syrups (like Vanilla/Caramel) if they are tagged for Coffee
+                isTypeMatch = (type === 'COFFEE_BEAN' || type === 'ADDITIVE' || type === 'OTHER' || type === 'SODA_SYRUP');
             } else if (mode === 'SLUSHIE') {
                 isTypeMatch = (type === 'SODA_SYRUP' || type === 'ADDITIVE' || type === 'OTHER');
             }
             
-            const isSystemMatch = systemList.includes(mode);
+            const isSystemMatch = systemList.map(s => s.trim()).includes(mode);
             const isExperimental = (recommendationMode === 'experimental');
             
             // In experimental mode, we bypass the system list check but keep the type check 
@@ -373,22 +377,34 @@
         return `bg-${category}`;
     }
 
-    function selectIngredient(id, name, intensity, category) {
+    function selectIngredient(id, name, intensity, category, profile = null, silent = false) {
         // Prevent molecular duplication in a single mix
         if (selectedIngredients.some(ing => ing.id == id)) {
             appendChatMessage('assistant', `The reagent <strong>${name}</strong> is already integrated into the current compound.`);
             return;
         }
 
-        selectedIngredients.push({id: id, name: name, intensity: parseInt(intensity), category: category});
-        updateSelectedArea();
-        fetchRecommendations();
-
-        // After 3rd ingredient: synthesize flavor report. Before: suggest next ingredient.
-        if (selectedIngredients.length >= 3) {
-            triggerFlavorSynthesis();
-        } else {
-            triggerProactiveSuggestion();
+        selectedIngredients.push({
+            id: id, 
+            name: name, 
+            intensity: parseInt(intensity), 
+            category: category,
+            profile: typeof profile === 'string' ? JSON.parse(profile) : profile
+        });
+        const maxIngredients = currentLabMode === 'COFFEE' ? 5 : 3;
+        const isDone = selectedIngredients.length >= maxIngredients || isCreamerTransition;
+        
+        updateSelectedArea(isDone);
+        
+        if (!silent) {
+            if (isDone) {
+                document.getElementById('stepContainer').style.display = 'none';
+                triggerFlavorSynthesis();
+                isCreamerTransition = false; // Reset for next use
+            } else {
+                fetchRecommendations();
+                triggerProactiveSuggestion();
+            }
         }
     }
 
@@ -405,17 +421,34 @@
                     'Content-Type': 'application/json',
                     'X-CSRFToken': '{{ csrf_token }}'
                 },
-                body: JSON.stringify({ drink_type: currentLabMode })
+                body: JSON.stringify({ 
+                    drink_type: currentLabMode,
+                    mode: recommendationMode
+                })
             });
             const data = await response.json();
 
             if (data.status === 'success') {
                 resetMixer();
                 data.ingredients.forEach(ing => {
-                    selectIngredient(ing.id, ing.name, ing.intensity, ing.category);
+                    // Use silent = true to prevent flood of AI messages during bulk addition
+                    selectIngredient(ing.id, ing.name, ing.intensity, ing.category, null, true);
                 });
+
+                // Display reasoning if AI was used for synthesis
+                if (data.reasoning) {
+                    const reasoningHtml = `
+                        <div class="pe-3">
+                            <div class="small fw-bold text-experimental mb-1"><i class="bi bi-robot"></i> AUTONOMOUS DESIGN INTENT</div>
+                            <div class="small italic opacity-75">"${data.reasoning}"</div>
+                        </div>
+                    `;
+                    appendChatMessage('assistant', reasoningHtml);
+                    aiChatHistory.push({role: 'assistant', content: `Design Intent: ${data.reasoning}`});
+                }
                 
-                // Immediately trigger synthesis report
+                // Fetch recommendations and trigger exactly ONE synthesis report
+                fetchRecommendations();
                 if (selectedIngredients.length > 0) {
                     triggerFlavorSynthesis();
                 }
@@ -433,8 +466,6 @@
 
     async function triggerFlavorSynthesis() {
         appendChatMessage('assistant', "Compiling synthesis report...", 'thinking');
-        const warming = document.getElementById('aiWarming');
-        warming.style.display = 'block';
 
         try {
             const r = await fetch('/api/ai/synthesize/', {
@@ -446,7 +477,6 @@
                 })
             });
             const data = await r.json();
-            warming.style.display = 'none';
             const thinking = document.querySelector('.msg-thinking');
             if (thinking) thinking.remove();
 
@@ -469,7 +499,6 @@
                 `);
             }
         } catch (err) {
-            warming.style.display = 'none';
             const thinking = document.querySelector('.msg-thinking');
             if (thinking) thinking.remove();
             appendChatMessage('assistant', `
@@ -488,13 +517,15 @@
                 btn.dataset.id,
                 btn.dataset.name,
                 btn.dataset.intensity,
-                btn.dataset.category
+                btn.dataset.category,
+                btn.dataset.profile || null
             );
         }
     });
 
     function resetMixer() {
         selectedIngredients = [];
+        isCreamerTransition = false;
         aiChatHistory = []; // Clear assistant context on hard reset
         document.getElementById('stepContainer').style.display = 'block';
         document.getElementById('stepTitle').textContent = 'Step 1: Select Base Component';
@@ -529,35 +560,63 @@
         }
     }
 
+    function startCreamerTransition() {
+        isCreamerTransition = true;
+        fetchRecommendations();
+    }
+
     function fetchRecommendations() {
         const ingredientIds = selectedIngredients.map(i => i.id);
+        const maxIngredients = currentLabMode === 'COFFEE' ? 5 : 3;
         
-        if (ingredientIds.length >= 3) {
+        if (ingredientIds.length >= maxIngredients) {
             document.getElementById('stepContainer').style.display = 'none';
             updateSelectedArea(true);
             return;
         }
 
-        let stepText = '';
-        if (ingredientIds.length === 0) {
-            stepText = 'Step 1: Select Base Component';
-        } else if (ingredientIds.length === 1) {
-            stepText = 'Step 2: Select Complementary Payload';
+        // Show/Hide Skip to Creamer button
+        const skipBtn = document.getElementById('skipToCreamerBtn');
+        if (currentLabMode === 'COFFEE' && ingredientIds.length >= 2 && !isCreamerTransition) {
+            skipBtn.style.display = 'block';
         } else {
-            stepText = 'Step 3: Select Stabilizer (Optional)';
+            skipBtn.style.display = 'none';
+        }
+
+        let stepText = '';
+        if (isCreamerTransition) {
+            stepText = `Step ${ingredientIds.length + 1}: Select Final Stabilizer`;
+        } else {
+            if (ingredientIds.length === 0) {
+                stepText = 'Step 1: Select Base Component';
+            } else if (ingredientIds.length === 1) {
+                stepText = 'Step 2: Select Complementary Payload';
+            } else if (ingredientIds.length === 2) {
+                stepText = 'Step 3: Select Flavor Accent' + (currentLabMode === 'COFFEE' ? '' : ' (Optional)');
+            } else if (ingredientIds.length === 3) {
+                stepText = 'Step 4: Select Deep Accent';
+            } else {
+                stepText = 'Step 5: Select Final Stabilizer';
+            }
         }
         
         document.getElementById('stepTitle').textContent = stepText;
         document.getElementById('availableIngredients').innerHTML = '<div class="col-12 text-center py-4"><div class="spinner-border text-gradient-lab" role="status"></div><p class="mt-2 text-dim">Computing molecular affinity...</p></div>';
 
+        const payload = { 
+            ingredient_ids: ingredientIds,
+            drink_type: currentLabMode,
+            mode: recommendationMode
+        };
+        
+        if (isCreamerTransition) {
+            payload.force_type = 'ADDITIVE';
+        }
+
         fetch('/api/recommendations/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                ingredient_ids: ingredientIds,
-                drink_type: currentLabMode,
-                mode: recommendationMode
-            })
+            body: JSON.stringify(payload)
         })
         .then(response => response.json())
         .then(data => {
@@ -635,35 +694,81 @@
         }
         
         selectedArea.style.display = 'block';
+        const scaleContainer = document.getElementById('scaleContainer');
+        if (currentLabMode === 'SODA' || currentLabMode === 'SLUSHIE') {
+            scaleContainer.style.display = 'flex';
+        } else {
+            scaleContainer.style.display = 'none';
+        }
+        
         let html = '<div class="row g-2 mb-3">';
         let hiddenInputs = '';
         const unit = currentLabMode === 'COFFEE' ? 'g' : 'ml';
         
+        const roles = ['BASE', 'PAYLOAD', 'ACCENT', 'DEEP ACCENT', 'STABILIZER'];
+        
         let totalSyrup = 0;
         selectedIngredients.forEach((ing, index) => {
-            const role = index === 0 ? 'BASE' : (index === 1 ? 'SECOND' : 'FINAL');
+            const role = index === (selectedIngredients.length - 1) ? 'FINAL' : (roles[index] || 'MODIFIER');
             let amount = 0;
             if (currentLabMode === 'COFFEE') {
                 amount = index === 0 ? 18.0 : (index === 1 ? 5.0 : 2.0);
             } else {
-                amount = index === 0 ? 2.0 : (index === 1 ? 1.0 : 0.5);
+                // New Hardened Defaults (100/50/25 for 1L)
+                const baseVolume = index === 0 ? 100.0 : (index === 1 ? 50.0 : 25.0);
+                amount = baseVolume * bottleScale;
             }
             
             if (currentLabMode === 'SLUSHIE' || currentLabMode === 'SODA') {
                 totalSyrup += amount;
             }
+
+            const dualLabel = currentLabMode !== 'COFFEE' ? `${amount}${unit} / ${mlToOz(amount)}oz` : `${amount}${unit}`;
             
             html += `
                 <div class="col-auto">
-                    <div class="glass-card p-2 text-center px-4" style="min-width: 130px;">
+                    <div class="glass-card p-2 text-center px-4" style="min-width: 150px; position: relative;">
                         <span class="readout-label d-block mb-1" style="font-size: 0.55rem;">${role}</span>
-                        <div class="fw-bold mb-1">${ing.name}</div>
-                        <div class="text-gradient-lab fw-black small">${amount}${unit}</div>
+                        <div class="fw-bold mb-1" style="font-size: 0.9rem;">${ing.name}</div>
+                        <div class="text-gradient-lab fw-black mb-2" style="font-size: 0.75rem;">${dualLabel}</div>
+                        
+                        <!-- 🧪 Synthesized Profile Display -->
+                        <div class="mt-1 pt-1 border-top border-white border-opacity-10">
+                            <div class="d-flex flex-column gap-1" style="font-size: 0.55rem;">
+                                ${['intensity', 'sweetness', 'acidity', 'bitterness'].map(attr => {
+                                    const val = ing.profile ? ing.profile[attr] : ing[attr];
+                                    const isSynthesized = ing.profile && ing.profile[attr] !== undefined;
+                                    const color = isSynthesized ? 'var(--fizz-cyan)' : 'var(--text-dim)';
+                                    return `
+                                        <div class="d-flex justify-content-between align-items-center gap-2">
+                                            <span style="color: ${color}; text-transform: uppercase;">${attr.slice(0, 3)}</span>
+                                            <div class="flex-grow-1 bg-white bg-opacity-10" style="height: 2px;">
+                                                <div style="width: ${(val/5)*100}%; height: 100%; background: ${color}; box-shadow: ${isSynthesized ? '0 0 5px var(--fizz-cyan)' : 'none'};"></div>
+                                            </div>
+                                            <span style="min-width: 8px; color: ${isSynthesized ? 'white' : 'var(--text-dim)'};">${val}</span>
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                            ${ing.profile ? `
+                                <div class="mt-1 text-center" style="font-size: 0.5rem; color: var(--fizz-cyan);">
+                                    <i class="bi bi-cpu"></i> FINE-TUNED REAGENT
+                                </div>
+                            ` : ''}
+                        </div>
                     </div>
                 </div>
             `;
             hiddenInputs += `<input type="hidden" name="ingredient_${ing.id}" value="${ing.id}">`;
             hiddenInputs += `<input type="hidden" name="amount_${ing.id}" value="${amount}">`;
+            
+            // 🧪 Inject Synthesized Profile Overrides into the form
+            if (ing.profile) {
+                hiddenInputs += `<input type="hidden" name="intensity_${ing.id}" value="${ing.profile.intensity}">`;
+                hiddenInputs += `<input type="hidden" name="sweetness_${ing.id}" value="${ing.profile.sweetness}">`;
+                hiddenInputs += `<input type="hidden" name="acidity_${ing.id}" value="${ing.profile.acidity}">`;
+                hiddenInputs += `<input type="hidden" name="bitterness_${ing.id}" value="${ing.profile.bitterness}">`;
+            }
         });
         
         html += '</div>';
@@ -682,15 +787,15 @@
                             <div class="d-flex gap-4">
                                 <div>
                                     <small class="text-dim d-block">Syrup Conc.</small>
-                                    <span class="fw-bold">${totalSyrup.toFixed(1)}oz</span>
+                                    <span class="fw-bold">${totalSyrup.toFixed(1)}${unit} / ${mlToOz(totalSyrup)}oz</span>
                                 </div>
                                 <div>
                                     <small class="text-dim d-block">Required Liquid</small>
-                                    <span class="text-gradient-lab fw-bold">${requiredWater.toFixed(1)}oz</span>
+                                    <span class="text-gradient-lab fw-bold">${requiredWater.toFixed(1)}${unit} / ${mlToOz(requiredWater)}oz</span>
                                 </div>
                                 <div>
                                     <small class="text-dim d-block">Total Yield</small>
-                                    <span class="fw-bold text-white">${totalVolume.toFixed(1)}oz</span>
+                                    <span class="fw-bold text-white">${totalVolume.toFixed(1)}${unit} / ${mlToOz(totalVolume)}oz</span>
                                 </div>
                             </div>
                         </div>
@@ -702,7 +807,8 @@
             `;
         }
         
-        if (isDone || selectedIngredients.length === 3) {
+        const maxIngredients = currentLabMode === 'COFFEE' ? 5 : 3;
+        if (isDone || selectedIngredients.length >= maxIngredients) {
             html += `<div class="alert bg-success bg-opacity-10 border border-success border-opacity-20 text-success small py-2">
                         <i class="bi bi-check2-circle"></i> Formulation complete. Synthesis ready for indexing.
                     </div>`;
@@ -734,19 +840,52 @@
     function interceptAndSave() {
         const data = {
             drink_type: currentLabMode,
-            ingredients: selectedIngredients.map((ing, idx) => ({
-                id: ing.id,
-                amount: currentLabMode === 'SODA' 
-                    ? (idx === 0 ? 2.0 : (idx === 1 ? 1.0 : 0.5))
-                    : (idx === 0 ? 18.0 : (idx === 1 ? 5.0 : 2.0))
-            }))
+            ingredients: selectedIngredients.map((ing, idx) => {
+                const baseVolume = currentLabMode === 'COFFEE' 
+                    ? (idx === 0 ? 18.0 : (idx === 1 ? 5.0 : 2.0))
+                    : (idx === 0 ? 100.0 : (idx === 1 ? 50.0 : 25.0));
+                
+                return {
+                    id: ing.id,
+                    amount: currentLabMode === 'COFFEE' ? baseVolume : baseVolume * bottleScale,
+                    profile: ing.profile || null
+                };
+            })
         };
 
-        document.getElementById('mixSummaryText').innerText = "Initiating laboratory archival process...";
         const saveBtn = document.getElementById('saveMixBtn');
         saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> ARCHIVING...';
         saveBtn.disabled = true;
         
+        // 🧪 Lab Data Projection: Inject hidden inputs into mixerForm before submission
+        const mixerForm = document.getElementById('mixerForm');
+        
+        // Clear any existing dynamic inputs to prevent duplicates
+        const oldDynamic = mixerForm.querySelectorAll('.dynamic-mix-input');
+        oldDynamic.forEach(el => el.remove());
+
+        selectedIngredients.forEach((ing, idx) => {
+            const baseVolume = currentLabMode === 'COFFEE' 
+                ? (idx === 0 ? 18.0 : (idx === 1 ? 5.0 : 2.0))
+                : (idx === 0 ? 100.0 : (idx === 1 ? 50.0 : 25.0));
+            const amount = currentLabMode === 'COFFEE' ? baseVolume : baseVolume * bottleScale;
+            
+            // Create inputs matching views.create_recipe expectations
+            const amountInput = document.createElement('input');
+            amountInput.type = 'hidden';
+            amountInput.name = `amount_${ing.id}`;
+            amountInput.value = amount;
+            amountInput.className = 'dynamic-mix-input';
+            mixerForm.appendChild(amountInput);
+
+            const notesInput = document.createElement('input');
+            notesInput.type = 'hidden';
+            notesInput.name = `notes_${ing.id}`;
+            notesInput.value = `Automatic laboratory synthesis (${currentLabMode}) at ${bottleScale}L Scale`;
+            notesInput.className = 'dynamic-mix-input';
+            mixerForm.appendChild(notesInput);
+        });
+
         fetch('/api/history/save/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
@@ -755,16 +894,16 @@
         .then(r => r.json())
         .then(res => {
             if (res.status === 'saved') {
-                document.getElementById('mixerForm').submit();
+                mixerForm.submit();
             } else {
                 alert('Archive failure: ' + (res.error || 'Unknown error'));
-                saveBtn.innerHTML = 'ARCHIVE SYNTHESIS';
+                saveBtn.innerHTML = '<i class="bi bi-journal-plus me-2"></i> ARCHIVE SYNTHESIS';
                 saveBtn.disabled = false;
             }
         })
         .catch(err => {
-            console.error(err);
-            document.getElementById('mixerForm').submit();
+            console.error('Laboratory Archival Exception:', err);
+            mixerForm.submit(); // Submit anyway on network error to allow recovery via view logic
         });
     }
 
@@ -794,42 +933,75 @@
             mode: recommendationMode
         };
 
-        const warming = document.getElementById('aiWarming');
-        warming.style.display = 'block';
-
         try {
             const r = await fetch('/api/ai/chat/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
                 body: JSON.stringify(payload)
             });
-            const data = await r.json();
             
-            warming.style.display = 'none';
             const thinking = document.querySelector('.msg-thinking');
             if (thinking) thinking.remove();
 
-            if (data.status === 'success') {
-                appendChatMessage('assistant', data.suggestion);
-                // Only push to history on successful exchange
-                aiChatHistory.push({role: 'user', content: userInput});
-                aiChatHistory.push({role: 'assistant', content: data.suggestion});
-                if (aiChatHistory.length > 20) aiChatHistory.splice(0, 2);
-                updateAIStatus('warm');
-            } else {
-                appendChatMessage('assistant', `
-                    <div class="pe-3">
-                        <div class="small fw-bold text-warning mb-1"><i class="bi bi-shield-exclamation"></i> TRANSMISSION INTERRUPTED</div>
-                        <div class="opacity-75 small">${data.error || "Substrate synchronization failed."}</div>
-                        <button class="btn btn-xs btn-accent mt-2 w-100 py-1" onclick="this.parentElement.parentElement.remove(); triggerAiChat('${userInput.replace(/'/g, "\\'")}')">
-                            <i class="bi bi-arrow-repeat me-1"></i> RE-ESTABLISH SIGNAL
-                        </button>
-                    </div>
-                `, 'msg-error');
-                updateAIStatus('dormant');
+            if (!r.ok) {
+                throw new Error("HTTP " + r.status);
             }
+
+            // Create streaming recipient container
+            const msgDiv = appendChatMessage('assistant', '');
+            
+            const reader = r.body.getReader();
+            const decoder = new TextDecoder("utf-8");
+            let fullResponse = "";
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                const chunk = decoder.decode(value, {stream: true});
+                const lines = chunk.split('\n');
+                
+                for (let line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const dataStr = line.substring(6).trim();
+                        if (dataStr && dataStr !== '[DONE]') {
+                            try {
+                                const dataObj = JSON.parse(dataStr);
+                                if (dataObj.chunk) {
+                                    if (dataObj.chunk.includes('Laboratory Error:')) {
+                                        // Intercept injected errors
+                                        msgDiv.innerHTML = `<div class="pe-3"><div class="small fw-bold text-warning mb-1"><i class="bi bi-shield-exclamation"></i> TRANSMISSION INTERRUPTED</div><div class="opacity-75 small">${dataObj.chunk}</div></div>`;
+                                        msgDiv.classList.add('msg-error');
+                                        return;
+                                    }
+                                    
+                                    fullResponse += dataObj.chunk;
+                                    
+                                    // Basic Markdown parsing for bolding and linebreaks
+                                    let formatted = fullResponse
+                                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                                        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                                        .replace(/\n/g, '<br>');
+                                        
+                                    msgDiv.innerHTML = formatted;
+                                    
+                                    const body = document.getElementById('aiChatBody');
+                                    body.scrollTop = body.scrollHeight;
+                                }
+                            } catch (e) {
+                                console.error("Error parsing stream chunk:", dataStr);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Only push to history on successful complete exchange
+            aiChatHistory.push({role: 'user', content: userInput});
+            aiChatHistory.push({role: 'assistant', content: fullResponse});
+            if (aiChatHistory.length > 20) aiChatHistory.splice(0, 2);
+
         } catch (err) {
-            warming.style.display = 'none';
             const thinking = document.querySelector('.msg-thinking');
             if (thinking) thinking.remove();
             appendChatMessage('assistant', `
@@ -840,7 +1012,6 @@
                     </button>
                 </div>
             `, 'msg-error');
-            updateAIStatus('dormant');
         }
     }
 
@@ -886,9 +1057,6 @@
                 exclude: isMore ? currentSuggestions : []
             };
 
-            const warming = document.getElementById('aiWarming');
-            warming.style.display = 'block';
-
             try {
                 const r = await fetch('/api/ai/suggest/', {
                     method: 'POST',
@@ -896,7 +1064,6 @@
                     body: JSON.stringify(payload)
                 });
                 const data = await r.json();
-                warming.style.display = 'none';
                 
                 const thinking = document.querySelector('.msg-thinking');
                 if (thinking) thinking.remove();
@@ -913,9 +1080,11 @@
                                 </button>
                             </div>`;
                         data.suggestions.forEach(s => {
+                            const profileJson = s.profile ? JSON.stringify(s.profile).replace(/"/g, '&quot;') : '';
                             html += `
                                 <div class="glass-card p-2 mb-2 border-accent border-opacity-25 hover-glow cursor-pointer transition-all select-ingredient-btn" 
-                                     data-id="${s.id}" data-name="${s.name}" data-intensity="${s.intensity}" data-category="${s.category}">
+                                     data-id="${s.id}" data-name="${s.name}" data-intensity="${s.intensity}" data-category="${s.category}"
+                                     data-profile='${profileJson}'>
                                     <div class="d-flex justify-content-between align-items-center">
                                         <span class="fw-bold text-accent">${s.name}</span>
                                         <div class="d-flex gap-1 align-items-center">
@@ -926,6 +1095,17 @@
                                     <div class="small text-white opacity-75 mt-1" style="font-size:0.75rem; line-height:1.2;">
                                         ${s.reason}
                                     </div>
+                                    ${s.profile ? `
+                                    <div class="mt-2 pt-2 border-top border-white border-opacity-10 d-flex justify-content-between">
+                                        <div class="d-flex gap-2" style="font-size: 0.6rem;">
+                                            <span class="text-dim">I: <span class="text-white">${s.profile.intensity}</span></span>
+                                            <span class="text-dim">S: <span class="text-white">${s.profile.sweetness}</span></span>
+                                            <span class="text-dim">A: <span class="text-white">${s.profile.acidity}</span></span>
+                                            <span class="text-dim">B: <span class="text-white">${s.profile.bitterness}</span></span>
+                                        </div>
+                                        <span class="text-accent" style="font-size: 0.55rem;"><i class="bi bi-cpu"></i> AI Tuned</span>
+                                    </div>
+                                    ` : ''}
                                 </div>
                             `;
                         });
@@ -940,7 +1120,12 @@
                         aiChatHistory.push({role: 'assistant', content: "[Structured Suggestions Provided]"});
                     } else {
                         // Handle raw suggestion (prose fallback)
-                        appendChatMessage('assistant', data.suggestion || "Molecular signal lost.");
+                        appendChatMessage('assistant', `
+                            <div class="mb-2">${data.suggestion || "Molecular signal lost."}</div>
+                            <button class="btn btn-xs btn-outline-experimental w-100 py-1" onclick="triggerProactiveSuggestion(true)">
+                                <i class="bi bi-arrow-repeat me-1"></i> Re-Attempt Structured Synthesis
+                            </button>
+                        `);
                         aiChatHistory.push({role: 'assistant', content: data.suggestion});
                     }
                 } else {
@@ -952,7 +1137,6 @@
                     `);
                 }
             } catch (err) {
-                warming.style.display = 'none';
                 const thinking = document.querySelector('.msg-thinking');
                 if (thinking) thinking.remove();
                 appendChatMessage('assistant', `
@@ -964,65 +1148,6 @@
             }
         }, isMore ? 100 : 1500); 
     }
-
-    // Heartbeat for Local LLMs
-    let statusText = document.getElementById('aiStatusText');
-    let statusDot = document.querySelector('.status-dot');
-
-    function updateAIStatus(state) {
-        if (state === 'waking') {
-            statusText.innerText = 'WAKING...';
-            statusText.className = 'text-warning';
-            statusDot.className = 'status-dot dot-warning';
-        } else if (state === 'warm') {
-            statusText.innerText = 'SYNCHRONIZED';
-            statusText.className = 'text-accent';
-            statusDot.className = 'status-dot dot-accent';
-        } else {
-            statusText.innerText = 'DORMANT';
-            statusText.className = 'text-dim';
-            statusDot.className = 'status-dot';
-        }
-    }
-
-    const heartbeat = () => {
-        updateAIStatus('waking');
-        const controller = new AbortController();
-        // Abort if the server doesn't respond within 15s — prevents hanging worker threads
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-        fetch('/api/ai/pulse/', {
-            method: 'POST',
-            headers: { 'X-CSRFToken': '{{ csrf_token }}' },
-            signal: controller.signal
-        })
-        .then(r => r.json())
-        .then(data => {
-            clearTimeout(timeoutId);
-            if (data.status === 'pulsed') {
-                updateAIStatus('warm');
-                // Visual feedback for heartbeat
-                const pulse = document.getElementById('aiPulse');
-                pulse.style.display = 'block';
-                setTimeout(() => { pulse.style.display = 'none'; }, 2000);
-            } else {
-                updateAIStatus('dormant');
-            }
-        })
-        .catch(() => {
-            clearTimeout(timeoutId);
-            updateAIStatus('dormant');
-        });
-    };
-
-    function initiateHeartbeat() {
-        // Pulsate immediately on startup
-        heartbeat();
-        // Every 8 minutes — Ollama's keep_alive is set to 10m so this keeps the model warm
-        setInterval(heartbeat, 8 * 60 * 1000);
-    }
-
-    initiateHeartbeat();
 </script>
 
 {% endblock %}

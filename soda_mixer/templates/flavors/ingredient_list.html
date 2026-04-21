@@ -35,6 +35,10 @@
             data-bs-target="#addIngredientModal">
             <i class="bi bi-plus-lg me-1"></i> ADD MATERIAL
         </button>
+        <button class="btn btn-sm btn-outline-experimental border-white border-opacity-10 text-white" 
+            id="btnBulkAnalyze" title="Analyze all uninitialized inventory reagents">
+            <i class="bi bi-cpu me-1"></i> BULK ANALYSIS
+        </button>
         <button class="btn btn-sm btn-outline-warning border-white border-opacity-10 text-white" data-bs-toggle="modal"
             data-bs-target="#manageCategoriesModal">
             <i class="bi bi-tags"></i>
@@ -79,7 +83,15 @@
                 </div>
             </div>
 
-            <div class="mb-4">
+            <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="readout-label" style="font-size: 0.55rem;">COMPLEXITY</span>
+                    <div class="lab-rating" style="font-size: 0.6rem;">
+                        {% for i in "12345" %}
+                        <i class="bi bi-circle-fill {% if ingredient.complexity >= i|add:0 %}active text-lab-accent{% else %}text-dim opacity-20{% endif %}"></i>
+                        {% endfor %}
+                    </div>
+                </div>
                 <div class="d-flex justify-content-between align-items-end mb-1">
                     <span class="readout-label" style="font-size: 0.55rem;">FLAVOR INTENSITY</span>
                     <span class="text-dim fw-bold" style="font-size: 0.65rem;">LVL {{ ingredient.intensity }}/5</span>
@@ -120,6 +132,7 @@
                         data-type="{{ ingredient.ingredient_type }}" data-category="{{ ingredient.category }}"
                         data-intensity="{{ ingredient.intensity }}" data-sweetness="{{ ingredient.sweetness }}"
                         data-acidity="{{ ingredient.acidity }}" data-bitterness="{{ ingredient.bitterness }}"
+                        data-complexity="{{ ingredient.complexity }}"
                         data-systems="{{ ingredient.compatible_systems }}"
                         data-description="{{ ingredient.description|default:'' }}">
                         <i class="bi bi-pencil"></i>
@@ -197,25 +210,30 @@
                     </div>
                 </div>
                 <div class="row g-2 mb-3">
-                    <div class="col-3">
-                        <label class="form-label text-white fw-bold small" title="1-5">Intensity</label>
+                    <div class="col-2">
+                        <label class="form-label text-white fw-bold small" title="1-5">Int.</label>
                         <input type="number" name="intensity" id="addInt" value="3" min="1" max="5"
-                            class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10 text-center">
+                            class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10 text-center px-1">
                     </div>
-                    <div class="col-3">
-                        <label class="form-label text-white fw-bold small" title="1-5">Sweetness</label>
+                    <div class="col-2">
+                        <label class="form-label text-white fw-bold small" title="1-5">Swt.</label>
                         <input type="number" name="sweetness" id="addSwt" value="3" min="1" max="5"
-                            class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10 text-center">
+                            class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10 text-center px-1">
                     </div>
-                    <div class="col-3">
-                        <label class="form-label text-white fw-bold small" title="1-5">Acidity</label>
+                    <div class="col-2">
+                        <label class="form-label text-white fw-bold small" title="1-5">Acd.</label>
                         <input type="number" name="acidity" id="addAcd" value="3" min="1" max="5"
-                            class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10 text-center">
+                            class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10 text-center px-1">
                     </div>
-                    <div class="col-3">
-                        <label class="form-label text-white fw-bold small" title="1-5">Bitterness</label>
+                    <div class="col-2">
+                        <label class="form-label text-white fw-bold small" title="1-5">Bit.</label>
                         <input type="number" name="bitterness" id="addBit" value="1" min="1" max="5"
-                            class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10 text-center">
+                            class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10 text-center px-1">
+                    </div>
+                    <div class="col-2">
+                        <label class="form-label text-white fw-bold small" title="1-5">Cpx.</label>
+                        <input type="number" name="complexity" id="addCpx" value="3" min="1" max="5"
+                            class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10 text-center px-1">
                     </div>
                 </div>
                 <div class="mb-3">
@@ -263,8 +281,8 @@
                     <label class="form-label text-white fw-bold small">Compound Name</label>
                     <div class="input-group">
                         <input type="text" name="name" id="editName" class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10" required>
-                        <button class="btn btn-outline-experimental" type="button" onclick="synthesizeProfile('edit')">
-                            <i class="bi bi-magic"></i> <span class="d-none d-sm-inline">Update Profile</span>
+                        <button class="btn btn-outline-experimental" type="button" onclick="synthesizeProfile('edit', this)">
+                            <i class="bi bi-magic"></i> <span class="d-none d-sm-inline">Re-Synthesize</span>
                         </button>
                     </div>
                 </div>
@@ -293,25 +311,30 @@
                     </div>
                 </div>
                 <div class="row g-2 mb-3">
-                    <div class="col-3">
-                        <label class="form-label text-white fw-bold small">Intensity</label>
+                    <div class="col-2">
+                        <label class="form-label text-white fw-bold small">Int.</label>
                         <input type="number" name="intensity" id="editInt" min="1" max="5"
-                            class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10 text-center">
+                            class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10 text-center px-1">
                     </div>
-                    <div class="col-3">
-                        <label class="form-label text-white fw-bold small">Sweetness</label>
+                    <div class="col-2">
+                        <label class="form-label text-white fw-bold small">Swt.</label>
                         <input type="number" name="sweetness" id="editSwt" min="1" max="5"
-                            class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10 text-center">
+                            class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10 text-center px-1">
                     </div>
-                    <div class="col-3">
-                        <label class="form-label text-white fw-bold small">Acidity</label>
+                    <div class="col-2">
+                        <label class="form-label text-white fw-bold small">Acd.</label>
                         <input type="number" name="acidity" id="editAcd" min="1" max="5"
-                            class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10 text-center">
+                            class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10 text-center px-1">
                     </div>
-                    <div class="col-3">
-                        <label class="form-label text-white fw-bold small">Bitterness</label>
+                    <div class="col-2">
+                        <label class="form-label text-white fw-bold small">Bit.</label>
                         <input type="number" name="bitterness" id="editBit" min="1" max="5"
-                            class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10 text-center">
+                            class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10 text-center px-1">
+                    </div>
+                    <div class="col-2">
+                        <label class="form-label text-white fw-bold small">Cpx.</label>
+                        <input type="number" name="complexity" id="editCpx" min="1" max="5"
+                            class="form-control bg-dark bg-opacity-50 text-white border-white border-opacity-10 text-center px-1">
                     </div>
                 </div>
                 <div class="mb-3">
@@ -429,6 +452,7 @@
                 document.getElementById('editSwt').value = d.sweetness;
                 document.getElementById('editAcd').value = d.acidity;
                 document.getElementById('editBit').value = d.bitterness;
+                document.getElementById('editCpx').value = d.complexity;
                 document.getElementById('editDesc').value = d.description;
                 
                 // Set system checkboxes
@@ -560,7 +584,8 @@
                     'Int': profile.intensity,
                     'Swt': profile.sweetness,
                     'Acd': profile.acidity,
-                    'Bit': profile.bitterness
+                    'Bit': profile.bitterness,
+                    'Cpx': profile.complexity
                 };
 
                 for (const [suffix, value] of Object.entries(fields)) {
@@ -586,6 +611,42 @@
                 btn.classList.add('btn-outline-experimental');
             }, 2000);
         }
+    }
+
+    // 6. Bulk Analysis Logic
+    const btnBulkAnalyze = document.getElementById('btnBulkAnalyze');
+    if (btnBulkAnalyze) {
+        btnBulkAnalyze.addEventListener('click', async function() {
+            if (!confirm("Initiate Bulk Chemical Synthesis? This will analyze all reagents in your inventory that are currently at default values. This may take 10-30 seconds.")) return;
+            
+            const originalHtml = btnBulkAnalyze.innerHTML;
+            btnBulkAnalyze.disabled = true;
+            btnBulkAnalyze.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> SYNTHESIZING...';
+            
+            try {
+                const response = await fetch('/api/ai/bulk-analyze/', {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+                });
+                const data = await response.json();
+                
+                if (data.status === 'success' || data.status === 'complete') {
+                    btnBulkAnalyze.innerHTML = '<i class="bi bi-check-all me-1"></i> SYNCED';
+                    btnBulkAnalyze.classList.replace('btn-outline-experimental', 'btn-success');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    alert("Analysis Failed: " + data.error);
+                }
+            } catch (err) {
+                alert("Signal Loss: Laboratory Substrate is unreachable.");
+            } finally {
+                setTimeout(() => {
+                    btnBulkAnalyze.disabled = false;
+                    btnBulkAnalyze.innerHTML = originalHtml;
+                    btnBulkAnalyze.classList.replace('btn-success', 'btn-outline-experimental');
+                }, 3000);
+            }
+        });
     }
 </script>
 {% endblock %}

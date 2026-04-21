@@ -167,7 +167,7 @@ def suggest_categories(ingredient_ids):
 
 
 # pairing suggestions with intensity rules
-def get_recommendation(ingredient_ids, drink_type='SODA', experimental=False):
+def get_recommendation(ingredient_ids, drink_type='SODA', experimental=False, force_type=None):
     """
     Get ingredient recommendations based on selected ingredients.
     """
@@ -200,6 +200,9 @@ def get_recommendation(ingredient_ids, drink_type='SODA', experimental=False):
             ).annotate(
                 avg_rating=Avg('ingredient_usage__recipe__rating')
             ).exclude(id__in=ingredient_ids)
+            
+        if force_type:
+            matching_ingredients = matching_ingredients.filter(ingredient_type=force_type)
         
         # Score matching ingredients
         for i in matching_ingredients:
@@ -236,7 +239,7 @@ def get_recommendation(ingredient_ids, drink_type='SODA', experimental=False):
         'suggestions': list(selected_ingredients)
     }
 
-def get_tiered_recommendation(base_id, secondary_id=None, drink_type='SODA', experimental=False):
+def get_tiered_recommendation(base_id, secondary_id=None, drink_type='SODA', experimental=False, force_type=None):
     """
     Get tiered recommendations (Secondary or Tertiary) based on selected base and optional secondary.
     """
@@ -253,13 +256,15 @@ def get_tiered_recommendation(base_id, secondary_id=None, drink_type='SODA', exp
                 avg_rating=Avg('ingredient_usage__recipe__rating')
             ).exclude(id=base_id)
         else:
-            compat_cats = CATEGORY_COMPATIBILITY.get(base_ingredient.category, [])
             candidates = Ingredient.objects.filter(
                 category__in=compat_cats, 
                 is_in_inventory=True
             ).annotate(
                 avg_rating=Avg('ingredient_usage__recipe__rating')
             ).exclude(id=base_id)
+            
+        if force_type:
+            candidates = candidates.filter(ingredient_type=force_type)
         
         for cand in candidates:
             score_data = _calculate_compatibility_score(base_ingredient, cand, experimental=experimental, avg_rating=cand.avg_rating)
@@ -295,6 +300,9 @@ def get_tiered_recommendation(base_id, secondary_id=None, drink_type='SODA', exp
             ).annotate(
                 avg_rating=Avg('ingredient_usage__recipe__rating')
             ).exclude(id__in=[base_id, secondary_id])
+            
+        if force_type:
+            candidates = candidates.filter(ingredient_type=force_type)
         
         for cand in candidates:
             res1 = _calculate_compatibility_score(base_ingredient, cand, experimental=experimental, avg_rating=cand.avg_rating)

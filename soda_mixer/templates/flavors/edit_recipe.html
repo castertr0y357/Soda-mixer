@@ -116,6 +116,7 @@
                                     <th class="border-0">MATERIEL</th>
                                     <th class="border-0">MASS (<span class="unit-label">{% if recipe.drink_type == 'COFFEE' %}G{% else %}ML{% endif %}</span>)</th>
                                     <th class="border-0">NOTES</th>
+                                    <th class="border-0 text-center">MOLECULAR BALANCE (I|S|A|B)</th>
                                     <th class="border-0 text-end">CONTROL</th>
                                 </tr>
                             </thead>
@@ -133,6 +134,19 @@
                                     <td class="border-white border-opacity-5">
                                         <input type="text" class="form-control form-control-sm bg-dark border-white border-opacity-10 text-white" 
                                                name="notes_{{ ri.ingredient.id }}" value="{{ ri.notes|default:'' }}" placeholder="Sensory note...">
+                                    </td>
+                                    <td class="border-white border-opacity-5">
+                                        <div class="d-flex align-items-center gap-1 justify-content-center">
+                                            <input type="number" name="intensity_{{ ri.ingredient.id }}" class="form-control form-control-xs lab-input-mini" value="{{ ri.intensity|default:ri.ingredient.intensity }}" min="1" max="5" title="Intensity">
+                                            <input type="number" name="sweetness_{{ ri.ingredient.id }}" class="form-control form-control-xs lab-input-mini" value="{{ ri.sweetness|default:ri.ingredient.sweetness }}" min="1" max="5" title="Sweetness">
+                                            <input type="number" name="acidity_{{ ri.ingredient.id }}" class="form-control form-control-xs lab-input-mini" value="{{ ri.acidity|default:ri.ingredient.acidity }}" min="1" max="5" title="Acidity">
+                                            <input type="number" name="bitterness_{{ ri.ingredient.id }}" class="form-control form-control-xs lab-input-mini" value="{{ ri.bitterness|default:ri.ingredient.bitterness }}" min="1" max="5" title="Bitterness">
+                                            <button type="button" class="btn btn-xs btn-outline-experimental p-1 ms-1" 
+                                                    onclick="synthesizeIngredientProfile('{{ ri.ingredient.id }}', '{{ ri.ingredient.name|escapejs }}', this)"
+                                                    title="AI Molecular Tweak">
+                                                <i class="bi bi-magic"></i>
+                                            </button>
+                                        </div>
                                     </td>
                                     <td class="border-white border-opacity-5 text-end">
                                         <button type="button" class="btn btn-outline-danger btn-sm border-0 opacity-50" onclick="removeIngredientRow({{ ri.ingredient.id }})">
@@ -248,6 +262,7 @@
                                 <th class="border-0">MATERIEL</th>
                                 <th class="border-0">MASS (<span class="unit-label">ML</span>)</th>
                                 <th class="border-0">NOTES</th>
+                                <th class="border-0 text-center">MOLECULAR BALANCE (I|S|A|B)</th>
                                 <th class="border-0 text-end">CONTROL</th>
                             </tr>
                         </thead>
@@ -277,6 +292,19 @@
                     <input type="text" class="form-control form-control-sm bg-dark border-white border-opacity-10 text-white" 
                            name="notes_${id}" placeholder="Sensory note...">
                 </td>
+                <td class="border-white border-opacity-5 text-center">
+                    <div class="d-flex align-items-center gap-1 justify-content-center">
+                        <input type="number" name="intensity_${id}" class="form-control form-control-xs lab-input-mini" value="3" min="1" max="5" title="Intensity">
+                        <input type="number" name="sweetness_${id}" class="form-control form-control-xs lab-input-mini" value="3" min="1" max="5" title="Sweetness">
+                        <input type="number" name="acidity_${id}" class="form-control form-control-xs lab-input-mini" value="3" min="1" max="5" title="Acidity">
+                        <input type="number" name="bitterness_${id}" class="form-control form-control-xs lab-input-mini" value="3" min="1" max="5" title="Bitterness">
+                        <button type="button" class="btn btn-xs btn-outline-experimental p-1 ms-1" 
+                                onclick="synthesizeIngredientProfile('${id}', '${name.replace(/'/g, "\\'")}', this)"
+                                title="AI Molecular Tweak">
+                            <i class="bi bi-magic"></i>
+                        </button>
+                    </div>
+                </td>
                 <td class="border-white border-opacity-5 text-end">
                     <button type="button" class="btn btn-outline-danger btn-sm border-0 opacity-50" onclick="removeIngredientRow(${id})">
                         <i class="bi bi-trash"></i>
@@ -286,6 +314,45 @@
         `;
         tbody.insertAdjacentHTML('beforeend', row);
         toggleDrinkType(); // Refresh labels
+    }
+
+    async function synthesizeIngredientProfile(id, name, btn) {
+        const originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+        try {
+            const response = await fetch('/api/ai/analyze-ingredient/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ name: name, description: '' })
+            });
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                const profile = data.profile;
+                const suffixes = ['intensity', 'sweetness', 'acidity', 'bitterness'];
+                suffixes.forEach(s => {
+                    const el = document.querySelector(`input[name="${s}_${id}"]`);
+                    if (el) {
+                        el.value = Math.round(profile[s]);
+                        el.classList.add('is-valid');
+                        setTimeout(() => el.classList.remove('is-valid'), 2000);
+                    }
+                });
+            } else {
+                alert("Analysis Error: " + data.error);
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Comms Failure: Could not reach assistant substrate.");
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }
     }
 
     function removeIngredientRow(id) {
@@ -303,5 +370,23 @@
 <style>
 .bg-pink { background-color: #e91e63 !important; }
 .badge-sm { padding: 0.25em 0.5em; font-size: 0.75rem; }
+.lab-input-mini {
+    width: 45px !important;
+    text-align: center;
+    padding: 0.1rem 0.2rem !important;
+    font-size: 0.75rem !important;
+    background: rgba(0, 0, 0, 0.4) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: var(--lab-accent) !important;
+    font-weight: bold;
+}
+.lab-input-mini:focus {
+    border-color: var(--lab-accent) !important;
+    box-shadow: 0 0 8px var(--lab-accent) !important;
+}
+.form-control-xs {
+    height: calc(1.5em + 0.5rem + 2px);
+    padding: 0.25rem 0.5rem;
+}
 </style>
 {% endblock %}

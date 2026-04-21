@@ -35,34 +35,42 @@
                         {% endif %}
                     </div>
 
-                    <div class="d-flex flex-wrap gap-3">
+                    <div class="d-flex flex-wrap gap-2">
                         {% for mi in mix.mix_ingredients.all %}
-                        <div class="glass-card p-2 px-3 border-white border-opacity-5 bg-white bg-opacity-5">
-                            <label class="readout-label mb-1" style="font-size: 0.55rem; color: var(--fizz-lime);">
-                                {% if forloop.first %}PRIMARY{% elif forloop.counter == 2 %}SECONDARY{% else %}MODIFIER{% endif %}
-                            </label>
-                            <div class="d-flex justify-content-between align-items-center mb-1">
-                                <div class="fw-bold text-white small">{{ mi.ingredient.name|default:"Signal Unidentified" }}</div>
-                                <span class="badge-fizz bg-{{ mi.ingredient.category }} py-0 px-1" style="font-size: 0.55rem;">{{ mi.ingredient.category }}</span>
+                        <div class="glass-card p-2 px-3 border-white border-opacity-5 bg-white bg-opacity-5 d-flex align-items-center gap-3" style="min-width: 180px;">
+                            <div class="flex-grow-1">
+                                <div class="readout-label mb-1" style="font-size: 0.5rem; color: var(--fizz-lime);">
+                                    {% if forloop.first %}PRIMARY{% elif forloop.counter == 2 %}SECONDARY{% else %}MODIFIER{% endif %}
+                                </div>
+                                <div class="fw-bold text-white fs-6 mb-0">{{ mi.ingredient.name|default:"Signal Unidentified" }}</div>
+                                <div class="text-dim extra-small opacity-75">
+                                    {{ mi.amount|floatformat:0 }}{% if mix.drink_type == 'SODA' %}ml{% else %}g{% endif %}
+                                    <span class="mx-1">•</span> 
+                                    <span class="text-{{ mi.ingredient.category }}">{{ mi.ingredient.category|upper }}</span>
+                                </div>
                             </div>
-                            <div class="text-dim small" style="font-size: 0.65rem;">{{ mi.amount|floatformat:1 }} {% if mix.drink_type == 'SODA' %}ml{% else %}g{% endif %}</div>
                         </div>
                         {% endfor %}
                     </div>
                 </div>
 
-                <div class="col-md-3 mt-3 mt-md-0 text-md-end">
-                    {% if mix.promoted_recipe %}
-                    <a href="{% url 'recipe_detail' mix.promoted_recipe.id %}" class="btn btn-sm btn-outline-success border-0 px-3">
-                        <i class="bi bi-kanban me-1"></i> Inspect Protocol
-                    </a>
-                    {% else %}
-                    <button class="btn btn-primary btn-sm px-4 promote-btn" 
-                            data-mix-id="{{ mix.id }}" 
-                            data-ingredients="[{% for mi in mix.mix_ingredients.all %}{{ mi.ingredient.id }}{% if not forloop.last %},{% endif %}{% endfor %}]">
-                        <i class="bi bi-journal-plus me-1"></i> Index Protocol
-                    </button>
-                    {% endif %}
+                <div class="col-md-3 mt-3 mt-md-0 d-flex flex-column align-items-md-end gap-2">
+                    <div class="d-flex gap-2">
+                        {% if not mix.promoted_recipe %}
+                        <button class="btn btn-primary btn-sm px-4 promote-btn" 
+                                data-mix-id="{{ mix.id }}" 
+                                data-ingredients="[{% for mi in mix.mix_ingredients.all %}{{ mi.ingredient.id }}{% if not forloop.last %},{% endif %}{% endfor %}]">
+                            <i class="bi bi-journal-plus me-1"></i> Index Protocol
+                        </button>
+                        {% else %}
+                        <a href="{% url 'recipe_detail' mix.promoted_recipe.id %}" class="btn btn-sm btn-outline-success border-white border-opacity-10 px-3">
+                            <i class="bi bi-kanban me-1"></i> Inspect
+                        </a>
+                        {% endif %}
+                        <button class="btn btn-outline-danger btn-sm border-0 opacity-25 hover-opacity-100" onclick="decommissionProtocol({{ mix.id }}, this)" title="Decommission Protocol">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -294,6 +302,35 @@ function submitPromotion() {
         } else {
             alert(data.error || 'Promotion failed.');
         }
+    });
+}
+
+function decommissionProtocol(mixId, btn) {
+    if (!confirm("Decommission this archival protocol? This action will permanently remove the experimental log.")) {
+        return;
+    }
+
+    const card = btn.closest('.col-12');
+    fetch(`/api/history/${mixId}/delete/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === 'success') {
+            card.style.opacity = '0';
+            card.style.transform = 'scale(0.95)';
+            setTimeout(() => card.remove(), 300);
+        } else {
+            alert("Decommission Error: " + (data.error || "Substrate communication failure."));
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        alert("Decommission Failure: Could not reach archival substrate.");
     });
 }
 </script>

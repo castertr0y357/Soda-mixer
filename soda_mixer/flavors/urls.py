@@ -34,6 +34,7 @@ urlpatterns = [
     path('api/history/save/', views.save_mix_to_history_api, name='save_mix_to_history_api'),
     path('api/history/<int:pk>/promote/', views.promote_mix_to_recipe_api, name='promote_mix_to_recipe_api'),
     path('api/generate-name/', views.generate_name_api, name='generate_name_api'),
+    path('api/history/<int:pk>/delete/', views.delete_history_api, name='delete_history_api'),
     path('api/category-suggestions/', views.get_category_suggestions_api, name='get_category_suggestions_api'),
     path('api/categories/create/', views.create_category_api, name='create_category_api'),
     path('api/categories/<int:pk>/delete/', views.delete_recipe_category_api, name='delete_recipe_category_api'),
@@ -42,7 +43,6 @@ urlpatterns = [
 
     # AI Assistant endpoints
     path('api/ai/chat/', views.ai_chat_api, name='ai_chat_api'),
-    path('api/ai/pulse/', views.ai_keep_warm_api, name='ai_keep_warm_api'),
     path('api/ai/provider/save/', views.save_llm_provider_api, name='save_llm_provider_api'),
     path('api/ai/provider/<int:pk>/delete/', views.delete_llm_provider_api, name='delete_llm_provider_api'),
     path('api/ai/provider/<int:pk>/models/', views.fetch_provider_models_api, name='fetch_provider_models_api'),
@@ -50,6 +50,7 @@ urlpatterns = [
     path('api/ai/suggest/', views.ai_suggest_api, name='ai_suggest_api'),
     path('api/ai/synthesize/', views.ai_synthesize_api, name='ai_synthesize_api'),
     path('api/ai/analyze-ingredient/', views.ai_analyze_ingredient_api, name='ai_analyze_ingredient_api'),
+    path('api/ai/bulk-analyze/', views.ai_bulk_analyze_api, name='ai_bulk_analyze_api'),
     path('api/random-pairing/', views.random_pairing_api, name='random_pairing_api'),
     
     # Auth
