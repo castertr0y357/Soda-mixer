@@ -139,14 +139,16 @@ graph TD
 
 ## 🧪 Installation Protocols
 
-### 🐳 Docker Deployment (Recommended)
-Initiate the full laboratory environment including the PostgreSQL core:
-
-```bash
-docker compose up -d --build
-```
-
 The laboratory terminal will be accessible at `http://localhost:8000`.
+
+### 🛡️ Ubuntu 24.04 (Noble Numbat) Production Note
+If deploying on Ubuntu 24.04, **do not use the Snap version of Docker**. The Snap sandbox interferes with the `nftables` bridge routing required for inter-container communication (specifically between `web` and `db`).
+
+**Recommended Setup:**
+1. Uninstall Snap Docker: `sudo snap remove docker`
+2. Install the [Official Docker Engine](https://docs.docker.com/engine/install/ubuntu/) via `apt`.
+3. Ensure `net.ipv4.ip_forward=1` is enabled in your kernel settings.
+4. If connectivity issues persist, a system reboot is required to synchronize the `DOCKER-ISOLATION` iptables chains.
 
 ### 💻 Manual Configuration (Developer Mode)
 
