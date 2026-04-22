@@ -150,6 +150,12 @@ If deploying on Ubuntu 24.04, **do not use the Snap version of Docker**. The Sna
 3. Ensure `net.ipv4.ip_forward=1` is enabled in your kernel settings.
 4. If connectivity issues persist, a system reboot is required to synchronize the `DOCKER-ISOLATION` iptables chains.
 
+**Note on Permissions:**
+If you receive a `Permission denied` error for `entrypoint.sh` after a pull, it is because Docker volume mounts can sometimes override the container's internal execution bits. Run this on your host machine to fix it:
+```bash
+chmod +x entrypoint.sh
+```
+
 ### 💻 Manual Configuration (Developer Mode)
 
 1. **Environment Setup**:
